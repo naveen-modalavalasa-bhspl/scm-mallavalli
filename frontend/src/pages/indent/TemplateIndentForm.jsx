@@ -54,14 +54,48 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
   const [warehouses, setWarehouses] = useState([]);
   const [projects, setProjects] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(false);
+
+  const loadVehicleOptions = useCallback(async (search = '') => {
+    setVehiclesLoading(true);
+    try {
+      const res = await api.get('/masters/vehicles', {
+        params: {
+          search,
+          is_active: true,
+          page: 1,
+          page_size: 50,
+        },
+      });
+      let data = res.data?.items || res.data?.data || res.data || [];
+      if (!Array.isArray(data)) data = [];
+
+      const currentCode = form.getFieldValue('vehicle_code');
+      const currentNum = form.getFieldValue('vehicle_number');
+      if ((currentCode || currentNum) && !search) {
+        setVehicles((prev) => {
+          const matched = prev.find((v) => v.vehicle_code === currentCode || v.vehicle_number === currentNum);
+          if (matched && !data.some((v) => v.vehicle_code === matched.vehicle_code)) {
+            return [matched, ...data];
+          }
+          return data;
+        });
+      } else {
+        setVehicles(data);
+      }
+    } catch (err) {
+      console.error('Error loading vehicles:', err);
+    } finally {
+      setVehiclesLoading(false);
+    }
+  }, [form]);
 
   const loadLookups = useCallback(async () => {
     const uid = user?.id;
     try {
-      const [whRes, projRes, vehRes] = await Promise.allSettled([
+      const [whRes, projRes] = await Promise.allSettled([
         api.get('/masters/warehouses', { params: { page_size: 200, user_id: uid, exclude_virtual: true } }),
         api.get('/masters/projects', { params: { page_size: 200, user_id: uid } }),
-        api.get('/masters/vehicles', { params: { is_active: true } }),
       ]);
 
       if (whRes.status === 'fulfilled') {
@@ -105,11 +139,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
         }
       }
 
-      if (vehRes.status === 'fulfilled') {
-        const v = vehRes.value.data;
-        const vList = Array.isArray(v) ? v : (v.items || v.data || []);
-        setVehicles(vList);
-      }
+      // Vehicles are loaded separately via loadVehicleOptions
     } catch { /* silent */ }
   }, [user, isNew, form]);
 
@@ -150,6 +180,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
 
   useEffect(() => {
     loadLookups();
+    loadVehicleOptions();
     if (!isNew) {
       fetchIndent();
     } else {
@@ -158,7 +189,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
         indent_date: dayjs(),
       });
     }
-  }, [id, isNew, loadLookups]);
+  }, [id, isNew, loadLookups, loadVehicleOptions]);
 
   const fetchTemplatesForProject = async (projectId) => {
     if (!projectId) {
@@ -247,6 +278,17 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
     }
     const tmplId = form.getFieldValue('template_id');
     if (tmplId && val) checkDuplicateIndent(tmplId, val);
+  };
+
+  const handleVehicleNumberChange = (val) => {
+    const matched = vehicles.find((v) => v.vehicle_number === val);
+    if (matched) {
+      form.setFieldsValue({ vehicle_code: matched.vehicle_code });
+      const tmplId = form.getFieldValue('template_id');
+      if (tmplId && matched.vehicle_code) checkDuplicateIndent(tmplId, matched.vehicle_code);
+    } else {
+      form.setFieldsValue({ vehicle_code: '' });
+    }
   };
 
   const handleSubmit = async () => {
@@ -416,7 +458,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
             size="small"
             pagination={false}
             columns={[
-              { title: '#', width: 50, render: (_, __, idx) => idx + 1 },
+              { title: 'S.NO', width: 50, render: (_, __, idx) => idx + 1 },
               { title: 'Item Code', width: 150, render: (_, r) => r.item_code || '-' },
               { title: 'Item Name', render: (_, r) => r.item_name || '-' },
               { title: 'Fixed Qty', dataIndex: 'requested_qty', width: 120, align: 'right' },
@@ -470,6 +512,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
                   showTime={{ format: 'HH:mm:ss' }}
                   format="DD/MM/YYYY HH:mm:ss"
                   style={{ width: '100%' }}
+                  disabled
                 />
               </Form.Item>
             </Col>
@@ -505,20 +548,33 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
 
           <Row gutter={16}>
             <Col xs={24} sm={12} md={12}>
+              <Form.Item name="vehicle_number" label="Vehicle Number" rules={[{ required: true, message: 'Vehicle number is required' }]}>
+                <Select
+                  placeholder="Select vehicle number"
+                  allowClear
+                  showSearch
+                  filterOption={false}
+                  onSearch={loadVehicleOptions}
+                  onFocus={() => loadVehicleOptions()}
+                  onChange={handleVehicleNumberChange}
+                  loading={vehiclesLoading}
+                  options={vehicles.map((v) => ({ label: v.vehicle_number, value: v.vehicle_number }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={12}>
               <Form.Item name="vehicle_code" label="Vehicle Code" rules={[{ required: true, message: 'Vehicle code is required' }]}>
                 <Select
                   placeholder="Select vehicle code"
                   allowClear
                   showSearch
-                  optionFilterProp="label"
+                  filterOption={false}
+                  onSearch={loadVehicleOptions}
+                  onFocus={() => loadVehicleOptions()}
                   onChange={handleVehicleChange}
+                  loading={vehiclesLoading}
                   options={vehicles.map((v) => ({ label: v.vehicle_code, value: v.vehicle_code }))}
                 />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={12}>
-              <Form.Item name="vehicle_number" label="Vehicle Number" rules={[{ required: true, message: 'Vehicle number is required' }]}>
-                <Input placeholder="Auto-populated from code" disabled style={{ color: 'rgba(0, 0, 0, 0.85)', backgroundColor: '#fafafa' }} />
               </Form.Item>
             </Col>
           </Row>
@@ -530,7 +586,7 @@ const TemplateIndentForm = ({ title = "Template Indent" }) => {
             size="small"
             pagination={false}
             columns={[
-              { title: '#', width: 50, render: (_, __, idx) => idx + 1 },
+              { title: 'S.NO', width: 50, render: (_, __, idx) => idx + 1 },
               { title: 'Item Code', width: 150, render: (_, r) => r.item_code || '-' },
               { title: 'Item Name', render: (_, r) => r.item_name || '-' },
               { title: 'Quantity (Fixed)', dataIndex: 'requested_qty', width: 150, align: 'right', render: (q) => <strong>{q}</strong> },

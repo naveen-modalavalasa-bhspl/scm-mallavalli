@@ -158,11 +158,12 @@ const IndentForm = () => {
       });
       const data = res.data || [];
 
-      const currentVal = form.getFieldValue('vehicle_code');
-      if (currentVal) {
+      const currentCode = form.getFieldValue('vehicle_code');
+      const currentNum = form.getFieldValue('vehicle_number');
+      if (currentCode || currentNum) {
         setVehicles((prev) => {
-          const matched = prev.find((v) => v.vehicle_code === currentVal);
-          if (matched && !data.some((v) => v.vehicle_code === currentVal)) {
+          const matched = prev.find((v) => v.vehicle_code === currentCode || v.vehicle_number === currentNum);
+          if (matched && !data.some((v) => v.vehicle_code === matched.vehicle_code)) {
             return [matched, ...data];
           }
           return data;
@@ -314,6 +315,15 @@ const IndentForm = () => {
       form.setFieldsValue({ vehicle_number: matched.vehicle_number });
     } else {
       form.setFieldsValue({ vehicle_number: '' });
+    }
+  };
+
+  const handleVehicleNumberChange = (val) => {
+    const matched = vehicles.find((v) => v.vehicle_number === val);
+    if (matched) {
+      form.setFieldsValue({ vehicle_code: matched.vehicle_code });
+    } else {
+      form.setFieldsValue({ vehicle_code: '' });
     }
   };
 
@@ -853,6 +863,21 @@ const IndentForm = () => {
 
           <Row gutter={16}>
             <Col xs={24} sm={12} md={8}>
+              <Form.Item name="vehicle_number" label="Vehicle Number" rules={[{ required: true, message: 'Vehicle number is required' }]}>
+                <Select
+                  placeholder="Select vehicle number"
+                  allowClear
+                  showSearch
+                  filterOption={false}
+                  onSearch={loadVehicleOptions}
+                  onFocus={() => loadVehicleOptions()}
+                  onChange={handleVehicleNumberChange}
+                  loading={vehiclesLoading}
+                  options={vehicles.map((v) => ({ label: v.vehicle_number, value: v.vehicle_number }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
               <Form.Item
                 name="vehicle_code"
                 label="Vehicle Code"
@@ -869,11 +894,6 @@ const IndentForm = () => {
                   loading={vehiclesLoading}
                   options={vehicles.map((v) => ({ label: v.vehicle_code, value: v.vehicle_code }))}
                 />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={8}>
-              <Form.Item name="vehicle_number" label="Vehicle Number" rules={[{ required: true, message: 'Vehicle number is required' }]}>
-                <Input placeholder="Auto-populated from code" disabled style={{ color: 'rgba(0, 0, 0, 0.85)', backgroundColor: '#fafafa' }} />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={8}>

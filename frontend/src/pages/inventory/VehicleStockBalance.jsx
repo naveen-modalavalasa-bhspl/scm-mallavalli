@@ -128,21 +128,6 @@ const VehicleStockBalance = () => {
       render: (v) => v || '-',
     },
     {
-      title: 'Valuation Rate',
-      dataIndex: 'valuation_rate',
-      key: 'valuation_rate',
-      width: 130,
-      align: 'right',
-      render: (v) => formatCurrency(v || 0),
-    },
-    {
-      title: 'Stock Value',
-      key: 'stock_value',
-      width: 140,
-      align: 'right',
-      render: (_, r) => formatCurrency((r.qty || 0) * (r.valuation_rate || 0)),
-    },
-    {
       title: 'Last Updated',
       dataIndex: 'last_updated',
       key: 'last_updated',

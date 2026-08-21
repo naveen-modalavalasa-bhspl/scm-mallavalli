@@ -70,7 +70,7 @@ const TemplateIndentList = ({ title = "Template Indents" }) => {
 
   const columns = [
     {
-      title: 'Indent #',
+      title: 'Indent No.',
       dataIndex: 'indent_number',
       key: 'indent_number',
       width: 150,

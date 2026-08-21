@@ -87,16 +87,13 @@ const VehicleStockLedger = () => {
       const data = res.data;
       const items = data.items || data.data || data || [];
       const exportData = items.map((r) => ({
-        'Posting Date': r.posting_date ? formatDateTime(r.posting_date) : '',
+        'Time Stamp': r.posting_date ? formatDateTime(r.posting_date) : '',
         'Vehicle Code': r.vehicle_code || '',
         'Vehicle Number': r.vehicle_number || '',
-        'Source Warehouse': r.warehouse_name || '-',
         'Item Code': r.item_code || '',
         'Item Name': r.item_name || '',
-        'Transaction Type': r.transaction_type || '',
         'Reference': r.reference || '',
         'Qty In': r.qty_in || 0,
-        'Qty Out': r.qty_out || 0,
         'Balance Qty': r.balance_qty || 0,
         'Created By': r.created_by_name || '',
       }));
@@ -126,9 +123,9 @@ const VehicleStockLedger = () => {
   // Columns
   const columns = [
     {
-      title: 'Posting Date',
+      title: 'Time Stamp',
       dataIndex: 'posting_date',
-      width: 150,
+      width: 180,
       fixed: 'left',
       sorter: true,
       render: (val) => formatDateTime(val),
@@ -144,13 +141,6 @@ const VehicleStockLedger = () => {
       dataIndex: 'vehicle_number',
       width: 130,
       sorter: true,
-    },
-    {
-      title: 'Source Warehouse',
-      dataIndex: 'warehouse_name',
-      width: 160,
-      sorter: true,
-      render: (val) => val || '-',
     },
     {
       title: 'Item Code',
@@ -170,16 +160,6 @@ const VehicleStockLedger = () => {
       ),
     },
     {
-      title: 'Transaction Type',
-      dataIndex: 'transaction_type',
-      width: 140,
-      render: (val) => (
-        <Tag color={getTransTypeColor(val)}>
-          {getTransTypeLabel(val)}
-        </Tag>
-      ),
-    },
-    {
       title: 'Reference',
       dataIndex: 'reference',
       width: 160,
@@ -196,15 +176,6 @@ const VehicleStockLedger = () => {
       align: 'right',
       render: (val) => (
         val > 0 ? <Text style={{ color: '#52c41a' }}>+{formatNumber(val)}</Text> : <Text type="secondary">0</Text>
-      ),
-    },
-    {
-      title: 'Qty Out',
-      dataIndex: 'qty_out',
-      width: 100,
-      align: 'right',
-      render: (val) => (
-        val > 0 ? <Text style={{ color: '#f5222d' }}>-{formatNumber(val)}</Text> : <Text type="secondary">0</Text>
       ),
     },
     {
