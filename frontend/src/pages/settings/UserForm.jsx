@@ -37,6 +37,7 @@ const UserForm = () => {
   const [roles, setRoles] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [positions, setPositions] = useState([]);
 
   // Role-warehouse mapping: { role_id: warehouse_id | null }
   const [roleWarehouseMap, setRoleWarehouseMap] = useState({});
@@ -45,10 +46,11 @@ const UserForm = () => {
 
   const fetchLookups = useCallback(async () => {
     try {
-      const [roleRes, whRes, projRes] = await Promise.allSettled([
+      const [roleRes, whRes, projRes, posRes] = await Promise.allSettled([
         api.get('/settings/roles', { params: { page_size: 200 } }),
         api.get('/masters/warehouses', { params: { page_size: 500 } }),
         api.get('/masters/projects', { params: { page_size: 500 } }),
+        api.get('/users/positions', { params: { page_size: 500 } }),
       ]);
       if (roleRes.status === 'fulfilled') {
         const d = roleRes.value.data;
@@ -61,6 +63,10 @@ const UserForm = () => {
       if (projRes.status === 'fulfilled') {
         const d = projRes.value.data;
         setProjects((d.items || d.data || d || []).map((p) => ({ label: p.name, value: p.id })));
+      }
+      if (posRes.status === 'fulfilled') {
+        const d = posRes.value.data;
+        setPositions((d.items || d.data || d || []).map((p) => ({ label: p.name, value: p.id })));
       }
     } catch { /* silent */ }
   }, []);
@@ -370,6 +376,25 @@ const UserForm = () => {
             <Col xs={24} sm={12}>
               <Form.Item name="department" label="Department">
                 <Input placeholder="Enter department" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="position_name" label="Position Name">
+                <Input placeholder="Enter position name" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="reports_to_position_id" label="Reports To Position">
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="Select reporting position"
+                  options={positions}
+                  allowClear
+                />
               </Form.Item>
             </Col>
           </Row>

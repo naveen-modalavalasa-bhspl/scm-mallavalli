@@ -81,6 +81,8 @@ class UserCreate(BaseModel):
     user_type: str = "core"
     department: Optional[str] = None
     designation: Optional[str] = None
+    position_name: Optional[str] = None
+    reports_to_position_id: Optional[int] = None
     role_ids: Optional[List[int]] = []
     warehouse_assignments: Optional[List['WarehouseAssignment']] = []
     project_ids: Optional[List[int]] = []
@@ -109,6 +111,8 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
+    position_name: Optional[str] = None
+    reports_to_position_id: Optional[int] = None
     is_active: Optional[bool] = None
     user_type: Optional[str] = None
     employee_code: Optional[str] = None
@@ -214,6 +218,8 @@ class UserResponse(BaseModel):
     employee_id: Optional[int] = None
     employee_code: Optional[str] = None
     position_id: Optional[int] = None
+    position_name: Optional[str] = None
+    reports_to_position_id: Optional[int] = None
     username: str
     email: str
     first_name: str

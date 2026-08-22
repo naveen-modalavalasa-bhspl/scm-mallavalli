@@ -140,6 +140,8 @@ async def _build_user_response(db: AsyncSession, u, roles_loaded=True):
 
     # Ensure employee is loaded/resolved
     employee_position_id = None
+    position_name = None
+    reports_to_position_id = None
     if u.employee_id:
         try:
             employee = u.employee
@@ -151,6 +153,11 @@ async def _build_user_response(db: AsyncSession, u, roles_loaded=True):
             )).scalar_one_or_none()
         if employee:
             employee_position_id = employee.position_id
+            if employee_position_id:
+                pos = (await db.execute(select(Position).where(Position.id == employee_position_id))).scalar_one_or_none()
+                if pos:
+                    position_name = pos.name
+                    reports_to_position_id = pos.parent_position_id
 
     # Fetch positions list and resolve project/warehouse lists via position-based lookup helpers
     from app.api.v1.auth import get_user_positions, get_user_projects_info, get_user_warehouses_info
@@ -160,7 +167,7 @@ async def _build_user_response(db: AsyncSession, u, roles_loaded=True):
 
     return UserResponse(
         id=u.id, organization_id=u.organization_id, employee_id=u.employee_id, employee_code=u.employee_code,
-        position_id=employee_position_id,
+        position_id=employee_position_id, position_name=position_name, reports_to_position_id=reports_to_position_id,
         username=u.username, email=u.email, first_name=u.first_name, last_name=u.last_name,
         full_name=full_name, phone=u.phone, user_type=u.user_type, department=u.department,
         designation=u.designation, is_active=u.is_active,
@@ -296,6 +303,13 @@ def _employee_directory_payload(employee, position=None, role=None, login_user=N
     }
 
 
+@router.get("/positions", tags=["Settings", "Positions"])
+async def get_positions(db: AsyncSession = Depends(get_db)):
+    """Fetch all existing positions for assignment."""
+    positions = (await db.execute(select(Position).order_by(Position.name))).scalars().all()
+    return [{"id": p.id, "name": p.name} for p in positions]
+
+
 @router.post("", response_model=UserResponse, status_code=201)
 async def create_user(
     payload: UserCreate,
@@ -344,6 +358,30 @@ async def create_user(
     db.add(user)
     await db.flush()
     await _sync_employee_link(db, user, payload.employee_id)
+
+    if payload.position_name:
+        import re
+        pos_code = re.sub(r'[^a-z0-9]+', '_', payload.position_name.lower()).strip('_')
+        position = (await db.execute(select(Position).where(Position.code == pos_code))).scalar_one_or_none()
+        if not position:
+            position = Position(
+                name=payload.position_name,
+                code=pos_code,
+                department=payload.department,
+                parent_position_id=payload.reports_to_position_id
+            )
+            db.add(position)
+            await db.flush()
+        else:
+            if payload.reports_to_position_id:
+                position.parent_position_id = payload.reports_to_position_id
+            await db.flush()
+            
+        if user.employee_id:
+            emp = (await db.execute(select(Employee).where(Employee.id == user.employee_id))).scalar_one_or_none()
+            if emp:
+                emp.position_id = position.id
+                await db.flush()
 
     # Assign roles
     for role_id in (payload.role_ids or []):
@@ -674,6 +712,8 @@ async def update_user(
 
     update_data = payload.model_dump(exclude_unset=True)
     employee_id = update_data.pop("employee_id", None)
+    position_name = update_data.pop("position_name", None)
+    reports_to_position_id = update_data.pop("reports_to_position_id", None)
 
     # Process username update
     new_username = update_data.pop("username", None)
@@ -767,6 +807,30 @@ async def update_user(
             setattr(user, key, value)
     await _sync_employee_link(db, user, employee_id)
     await db.flush()
+
+    if position_name:
+        import re
+        pos_code = re.sub(r'[^a-z0-9]+', '_', position_name.lower()).strip('_')
+        position = (await db.execute(select(Position).where(Position.code == pos_code))).scalar_one_or_none()
+        if not position:
+            position = Position(
+                name=position_name,
+                code=pos_code,
+                department=user.department,
+                parent_position_id=reports_to_position_id
+            )
+            db.add(position)
+            await db.flush()
+        else:
+            if reports_to_position_id:
+                position.parent_position_id = reports_to_position_id
+            await db.flush()
+            
+        if user.employee_id:
+            emp = (await db.execute(select(Employee).where(Employee.id == user.employee_id))).scalar_one_or_none()
+            if emp:
+                emp.position_id = position.id
+                await db.flush()
 
     # Reload with roles, warehouses, and projects
     result = await db.execute(
