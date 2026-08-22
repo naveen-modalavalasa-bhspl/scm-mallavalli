@@ -621,11 +621,11 @@ const App = () => {
             <Route path="/indent/template-indents/new" element={<KeyRoute requiredKey="indent-template-indents"><TemplateIndentForm title="Create Template Indent" /></KeyRoute>} />
             <Route path="/indent/template-indents/:id" element={<KeyRoute requiredKey="indent-template-indents"><TemplateIndentForm title="Template Indent" /></KeyRoute>} />
 
-            <Route path="/indent/acknowledgement" element={<KeyRoute requiredKey={["indent-material-acknowledgement", "indent-acknowledgement"]}><IndentAcknowledgement /></KeyRoute>} />
-            <Route path="/indent/acknowledgement/new" element={<KeyRoute requiredKey={["indent-material-acknowledgement", "indent-acknowledgement"]}><AcknowledgementForm /></KeyRoute>} />
-            <Route path="/indent/material-acknowledgement" element={<KeyRoute requiredKey={["indent-material-acknowledgement", "indent-acknowledgement"]}><MaterialAcknowledgementList /></KeyRoute>} />
-            <Route path="/indent/material-acknowledgement/new" element={<KeyRoute requiredKey={["indent-material-acknowledgement", "indent-acknowledgement"]}><MaterialAcknowledgementForm /></KeyRoute>} />
-            <Route path="/indent/material-acknowledgement/:id" element={<KeyRoute requiredKey={["indent-material-acknowledgement", "indent-acknowledgement"]}><MaterialAcknowledgementForm isViewOnly={true} /></KeyRoute>} />
+            <Route path="/indent/acknowledgement" element={<KeyRoute requiredKey={["indent-acknowledgement"]}><IndentAcknowledgement /></KeyRoute>} />
+            <Route path="/indent/acknowledgement/new" element={<KeyRoute requiredKey={["indent-acknowledgement"]}><AcknowledgementForm /></KeyRoute>} />
+            <Route path="/indent/material-acknowledgement" element={<KeyRoute requiredKey={["indent-material-acknowledgement"]}><MaterialAcknowledgementList /></KeyRoute>} />
+            <Route path="/indent/material-acknowledgement/new" element={<KeyRoute requiredKey={["indent-material-acknowledgement"]}><MaterialAcknowledgementForm /></KeyRoute>} />
+            <Route path="/indent/material-acknowledgement/:id" element={<KeyRoute requiredKey={["indent-material-acknowledgement"]}><MaterialAcknowledgementForm isViewOnly={true} /></KeyRoute>} />
             <Route path="/indent/reports" element={<KeyRoute requiredKey="indent-reports"><IndentReports /></KeyRoute>} />
             <Route path="/indent/notifications" element={<KeyRoute requiredKey="indent-notifications"><IndentNotifications /></KeyRoute>} />
 

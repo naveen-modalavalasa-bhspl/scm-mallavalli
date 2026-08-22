@@ -267,43 +267,7 @@ async def allowed_keys_for_role(db: AsyncSession, role: Role) -> List[str]:
             mapped_keys.extend([
                 "settings-masters-organization-structure",
             ])
-        elif key == "warehouse-material-issues":
-            mapped_keys.extend([
-                "warehouse-vehicle-material-issues",
-                "warehouse-material-issues-template",
-            ])
-        elif key == "warehouse-vehicle-material-issues":
-            mapped_keys.extend([
-                "warehouse-material-issues",
-            ])
-        elif key == "inventory-masters":
-            mapped_keys.extend([
-                "inventory-masters-project-templates",
-            ])
-        elif key == "inventory-masters-project-templates":
-            mapped_keys.extend([
-                "inventory-masters",
-            ])
-        elif key == "indent-transactions" or key == "indent-indents" or key == "indent":
-            mapped_keys.extend([
-                "indent-template-indents",
-            ])
-        elif key == "inventory-stock-balance":
-            mapped_keys.extend([
-                "inventory-vehicle-stock-balance",
-            ])
-        elif key == "inventory-stock-ledger":
-            mapped_keys.extend([
-                "inventory-vehicle-stock-ledger",
-            ])
-        elif key == "indent-acknowledgement":
-            mapped_keys.extend([
-                "indent-material-acknowledgement",
-            ])
-        elif key == "indent-material-acknowledgement":
-            mapped_keys.extend([
-                "indent-acknowledgement",
-            ])
+        # Removed forceful mapping of distinct pages to ensure strict RBAC compliance.
             
         for k in mapped_keys:
             dynamic_keys.add(k)

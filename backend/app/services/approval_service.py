@@ -672,7 +672,21 @@ async def get_level_eligible_approver_ids(
                     )
                 )
             )
-            return {r[0] for r in eligible_users_q.all()}
+            eligible = {r[0] for r in eligible_users_q.all()}
+            
+            # Fallback for manually created users (no position mapped)
+            if active_pos.role_id:
+                fallback_users_q = await db.execute(
+                    select(User.id)
+                    .outerjoin(Employee, Employee.id == User.employee_id)
+                    .where(
+                        User.active_role_id == active_pos.role_id,
+                        or_(Employee.id.is_(None), Employee.position_id.is_(None))
+                    )
+                )
+                eligible.update({r[0] for r in fallback_users_q.all()})
+                
+            return eligible
 
     result = await db.execute(
         select(ApprovalLevel).where(
@@ -975,8 +989,12 @@ async def can_user_approve(
             # 2. Active role match (must also be eligible for this position)
             if is_user_eligible and user_role_id and pos_role_id and user_role_id == pos_role_id:
                 return True
+                
+            # 3. Fallback for manually created users (no position mapped)
+            if not user_pos_id and user_role_id and pos_role_id and user_role_id == pos_role_id:
+                return True
 
-            # 3. Delegations
+            # 4. Delegations
             if delegated_from & eligible_user_ids:
                 return True
 

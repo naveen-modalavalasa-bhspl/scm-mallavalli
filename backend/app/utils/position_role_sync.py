@@ -75,6 +75,24 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
     ).scalar_one_or_none()
     if existing is None:
         db.add(UserRole(user_id=user.id, role_id=role.id))
+        await db.flush()
+
+    if user.active_role_id is not None:
+        valid_role = (
+            await db.execute(
+                select(UserRole).where(
+                    UserRole.user_id == user.id,
+                    UserRole.role_id == user.active_role_id,
+                )
+            )
+        ).scalar_one_or_none()
+        
+        if valid_role is not None:
+            current_active = (
+                await db.execute(select(Role).where(Role.id == user.active_role_id))
+            ).scalar_one_or_none()
+            if current_active is not None:
+                return current_active
 
     if user.active_role_id != role.id:
         user.active_role_id = role.id

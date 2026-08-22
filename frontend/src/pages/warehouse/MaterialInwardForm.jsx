@@ -216,9 +216,9 @@ const MaterialInwardForm = () => {
         message.error('Add at least one item');
         return;
       }
-      const validItems = items.filter((i) => i.item_id || i.item_name_manual);
+      const validItems = items.filter((i) => i.item_id);
       if (validItems.length === 0) {
-        message.error('Each item must have either a linked item or a manual name');
+        message.error('Each item must have a linked item');
         return;
       }
       const payload = {
@@ -299,18 +299,7 @@ const MaterialInwardForm = () => {
         );
       },
     },
-    {
-      title: 'Manual Name',
-      dataIndex: 'item_name_manual',
-      width: 160,
-      render: (val, record) => !isNew ? (val || '-') : (
-        <Input
-          value={val}
-          placeholder="If not in system"
-          onChange={(e) => handleItemFieldChange(record.key, 'item_name_manual', e.target.value)}
-        />
-      ),
-    },
+
     {
       title: 'Ordered Qty',
       dataIndex: 'ordered_qty',
@@ -417,34 +406,11 @@ const MaterialInwardForm = () => {
           <Divider orientation="left">PO Reference (Optional)</Divider>
           <Row gutter={16}>
             <Col span={10}>
-              <Form.Item name="po_number" label="PO Number">
-                {!isNew ? (
-                  <Input placeholder="PO number" />
-                ) : (
-                  <Select
-                    showSearch
-                    placeholder="Select PO to auto-fill"
-                    options={poList}
-                    loading={fetchingPoList}
-                    onFocus={fetchActivePOs}
-                    onChange={(v) => {
-                      form.setFieldsValue({ po_number: v });
-                      handleFetchPO(v);
-                    }}
-                    filterOption={(input, option) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                    }
-                    allowClear
-                  />
-                )}
+              <Form.Item name="po_number" label="PO Number/delivery of document">
+                <Input placeholder="Enter PO Number or delivery of document" />
               </Form.Item>
             </Col>
             <Col span={4} style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 24 }}>
-              {isNew && (
-                <Button icon={<SearchOutlined />} onClick={() => handleFetchPO()} loading={poLoading}>
-                  Fetch
-                </Button>
-              )}
             </Col>
             <Col span={10}>
               <Form.Item name="po_id" hidden><Input /></Form.Item>

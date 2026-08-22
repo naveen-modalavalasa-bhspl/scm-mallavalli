@@ -79,7 +79,7 @@ const MaterialInward = () => {
       ),
     },
     {
-      title: 'PO Number',
+      title: 'PO Number/delivery of document',
       dataIndex: 'po_number',
       key: 'po_number',
       width: 140,

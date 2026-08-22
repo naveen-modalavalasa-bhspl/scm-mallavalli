@@ -348,6 +348,8 @@ async def create_user(
     # Assign roles
     for role_id in (payload.role_ids or []):
         db.add(UserRole(user_id=user.id, role_id=role_id))
+    if payload.role_ids:
+        user.active_role_id = payload.role_ids[0]
 
     # Assign warehouses with optional per-role mapping
     for assignment in (payload.warehouse_assignments or []):
@@ -729,6 +731,8 @@ async def update_user(
         await db.execute(delete(UserRole).where(UserRole.user_id == user_id))
         for role_id in role_ids:
             db.add(UserRole(user_id=user_id, role_id=role_id))
+        if user.active_role_id not in role_ids:
+            user.active_role_id = role_ids[0] if role_ids else None
 
     # Handle warehouse reassignment (role-warehouse mapping)
     warehouse_assignments = update_data.pop("warehouse_assignments", None)

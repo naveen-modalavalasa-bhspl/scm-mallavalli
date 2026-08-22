@@ -282,25 +282,7 @@ def require_permission(module, action: str, resource: str):
         if action in ("edit", "update"):
             action_keys.update(("edit", "update"))
             
-        modules = [module] if isinstance(module, str) else list(module)
-        expanded_modules = set(modules)
-        for m in modules:
-            if m == "warehouse-vehicle-material-issues":
-                expanded_modules.add("warehouse-material-issues")
-            elif m == "warehouse-material-issues":
-                expanded_modules.add("warehouse-vehicle-material-issues")
-            elif m == "indent-material-acknowledgement":
-                expanded_modules.add("indent-acknowledgement")
-            elif m == "indent-acknowledgement":
-                expanded_modules.add("indent-material-acknowledgement")
-            elif m == "inventory-masters-project-templates":
-                expanded_modules.add("inventory-masters")
-            elif m == "inventory-masters":
-                expanded_modules.add("inventory-masters-project-templates")
-            elif m == "inventory-stock-balance":
-                expanded_modules.add("inventory-vehicle-stock-balance")
-            elif m == "inventory-stock-ledger":
-                expanded_modules.add("inventory-vehicle-stock-ledger")
+        expanded_modules = set([module] if isinstance(module, str) else list(module))
 
         resource_key = (resource or "").replace("_", "-")
         resource_keys = {resource_key}
@@ -733,9 +715,17 @@ MANAGERIAL_ROLES = frozenset({
 
 
 async def user_is_managerial(db: AsyncSession, user_id: int) -> bool:
-    """True if user has any role that grants visibility across all warehouses."""
+    """True if user has any role that grants visibility across all warehouses.
+    Also returns True if the user has a specific global permission."""
     codes = set(await get_user_role_codes(db, user_id))
-    return bool(codes & MANAGERIAL_ROLES)
+    if bool(codes & MANAGERIAL_ROLES):
+        return True
+        
+    permissions = set(await get_user_permissions(db, user_id))
+    if "system.view_all.data" in permissions or "system.manage_all.data" in permissions:
+        return True
+        
+    return False
 
 
 async def user_warehouse_ids(db: AsyncSession, user_id: int) -> List[int]:

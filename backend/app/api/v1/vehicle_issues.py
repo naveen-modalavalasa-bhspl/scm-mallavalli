@@ -23,12 +23,12 @@ from app.api.v1.warehouse import validate_material_issue_items_flow, clean_seria
 router = APIRouter()
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues"))])
+@router.post("", status_code=201, dependencies=[Depends(require_key("warehouse-vehicle-material-issues"))])
 async def create_vehicle_issue(
     payload: VehicleIssueCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(
-        ["warehouse-vehicle-material-issues", "warehouse-material-issues"], "create", "warehouse-material-issues"
+        "warehouse-vehicle-material-issues", "create", "warehouse-vehicle-material-issues"
     )),
 ):
     """Create a new vehicle issue. Auto-generates issue_number."""
@@ -269,7 +269,7 @@ async def create_vehicle_issue(
     return {"id": vi.id, "issue_number": issue_number, "status": "issued", "message": "Vehicle issue created and material issued successfully"}
 
 
-@router.get("", dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues", "indent-material-acknowledgement", "indent-acknowledgement"))])
+@router.get("", dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "indent-material-acknowledgement"))])
 async def list_vehicle_issues(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -413,7 +413,7 @@ async def list_vehicle_issues(
     return build_paginated_response(data, total, page, page_size)
 
 
-@router.get("/{issue_id}", response_model=VehicleIssueResponse, dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues", "indent-material-acknowledgement", "indent-acknowledgement"))])
+@router.get("/{issue_id}", response_model=VehicleIssueResponse, dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "indent-material-acknowledgement"))])
 async def get_vehicle_issue(
     issue_id: int,
     db: AsyncSession = Depends(get_db),
@@ -501,7 +501,7 @@ async def get_vehicle_issue(
     return response
 
 
-@router.put("/{issue_id}", dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues"))])
+@router.put("/{issue_id}", dependencies=[Depends(require_key("warehouse-vehicle-material-issues"))])
 async def update_vehicle_issue(
     issue_id: int,
     payload: VehicleIssueUpdate,
@@ -586,12 +586,12 @@ async def update_vehicle_issue(
     return {"id": vi.id, "issue_number": vi.issue_number, "message": "Vehicle issue updated successfully"}
 
 
-@router.post("/{issue_id}/issue", dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues"))])
+@router.post("/{issue_id}/issue", dependencies=[Depends(require_key("warehouse-vehicle-material-issues"))])
 async def issue_vehicle_material(
     issue_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(
-        ["warehouse-vehicle-material-issues", "warehouse-material-issues"], "approve", "warehouse-material-issues"
+        "warehouse-vehicle-material-issues", "approve", "warehouse-vehicle-material-issues"
     )),
 ):
     """Deduct/Reserve stock and mark vehicle issue as issued."""
@@ -734,12 +734,12 @@ async def issue_vehicle_material(
     return {"id": vi.id, "issue_number": vi.issue_number, "message": "Vehicle issue confirmed successfully, stock reserved"}
 
 
-@router.post("/{issue_id}/cancel", dependencies=[Depends(require_key("warehouse-vehicle-material-issues", "warehouse-material-issues"))])
+@router.post("/{issue_id}/cancel", dependencies=[Depends(require_key("warehouse-vehicle-material-issues"))])
 async def cancel_vehicle_issue(
     issue_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission(
-        ["warehouse-vehicle-material-issues", "warehouse-material-issues"], "delete", "warehouse-material-issues"
+        "warehouse-vehicle-material-issues", "delete", "warehouse-vehicle-material-issues"
     )),
 ):
     """Cancel a draft or issued vehicle issue and release reservations."""
