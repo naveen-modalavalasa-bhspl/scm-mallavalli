@@ -413,8 +413,7 @@ async def login(
         # Cookie-set must never break login.
         pass
 
-    await sync_user_position_role(db, user)
-    role_added = any(isinstance(obj, UserRole) and obj.user_id == user.id for obj in db.new)
+    _, role_added = await sync_user_position_role(db, user)
     if role_added:
         user = (
             await db.execute(
@@ -523,9 +522,8 @@ async def get_me(
     db: AsyncSession = Depends(get_db),
 ):
     """Get current user profile."""
-    await sync_user_position_role(db, current_user)
+    _, role_added = await sync_user_position_role(db, current_user)
     from sqlalchemy import inspect
-    role_added = any(isinstance(obj, UserRole) and obj.user_id == current_user.id for obj in db.new)
     if role_added or 'employee' in inspect(current_user).unloaded:
         current_user = (
             await db.execute(

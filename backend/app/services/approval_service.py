@@ -477,9 +477,10 @@ async def submit_for_approval(
             # Save the request in ApprovalRequest
             total_levels = len(chain_positions)
             
-            # If chain is empty, it means no approval is required, auto-approve it!
-            status = "approved" if total_levels == 0 else "pending"
-            completed_at = datetime.now(timezone.utc) if total_levels == 0 else None
+            # If chain is empty, leave it pending at level 1 so the fallback logic
+            # in can_user_approve (ProjectWorkflowConfig) can pick it up.
+            status = "pending"
+            completed_at = None
             
             import json as _json
             extra_blob = None
@@ -506,15 +507,7 @@ async def submit_for_approval(
             )
             db.add(request)
             await db.flush()
-            if total_levels == 0:
-                await update_document_status(
-                    db,
-                    document_type=document_type,
-                    document_id=document_id,
-                    status="approved",
-                    user_id=requested_by,
-                    request=request
-                )
+            # Auto-approval block removed. Let it stay pending.
             await send_approval_request_notifications(db, request)
             return request
 
@@ -1008,6 +1001,7 @@ async def can_user_approve(
             try:
                 from app.models.settings_master import Employee, Position
                 from app.models.approval import ProjectWorkflowConfig
+                from app.models.user import User
 
                 # Get the project from the workflow
                 wf_q = await db.execute(

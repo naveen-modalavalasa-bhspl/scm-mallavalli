@@ -5,10 +5,12 @@ from app.models.master import Employee, Position
 from app.models.user import Role, User, UserRole
 
 
-async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
-    """Ensure a login user acts as the role assigned to their employee position."""
+async def sync_user_position_role(db: AsyncSession, user: User) -> tuple[Role | None, bool]:
+    """Ensure a login user acts as the role assigned to their employee position.
+    Returns (current_active_role, role_was_added_bool).
+    """
     if not user or not user.employee_id:
-        return None
+        return None, False
 
     role = (
         await db.execute(
@@ -29,6 +31,7 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
         )
     ).scalars().all()
 
+    role_added = False
     if assigned_admin_roles:
         # Ensure the position role is added to UserRole table so they can switch to it if desired
         if role:
@@ -43,6 +46,7 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
             if existing is None:
                 db.add(UserRole(user_id=user.id, role_id=role.id))
                 await db.flush()
+                role_added = True
 
         # Respect active_role_id if set, otherwise default to their admin/super_admin role
         current_active = None
@@ -58,12 +62,12 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
             admin_role = next((r for r in assigned_admin_roles if r.code == "admin"), None)
             user.active_role_id = (super_admin_role or admin_role).id
             await db.flush()
-            return super_admin_role or admin_role
+            return (super_admin_role or admin_role), role_added
 
-        return current_active
+        return current_active, role_added
 
     if role is None:
-        return None
+        return None, role_added
 
     existing = (
         await db.execute(
@@ -76,6 +80,7 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
     if existing is None:
         db.add(UserRole(user_id=user.id, role_id=role.id))
         await db.flush()
+        role_added = True
 
     if user.active_role_id is not None:
         valid_role = (
@@ -92,10 +97,10 @@ async def sync_user_position_role(db: AsyncSession, user: User) -> Role | None:
                 await db.execute(select(Role).where(Role.id == user.active_role_id))
             ).scalar_one_or_none()
             if current_active is not None:
-                return current_active
+                return current_active, role_added
 
     if user.active_role_id != role.id:
         user.active_role_id = role.id
 
     await db.flush()
-    return role
+    return role, role_added

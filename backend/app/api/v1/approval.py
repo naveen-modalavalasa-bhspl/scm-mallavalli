@@ -460,13 +460,6 @@ async def get_project_workflow_config(
     
     roles_result = await db.execute(
         select(Role)
-        .outerjoin(Position, Position.role_id == Role.id)
-        .outerjoin(ProjectWorkflowConfig, ProjectWorkflowConfig.role_id == Role.id)
-        .where(
-            (Position.project_id == project_id) |
-            (ProjectWorkflowConfig.project_id == project_id)
-        )
-        .distinct()
         .order_by(Role.name)
     )
     roles = roles_result.scalars().all()

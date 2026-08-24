@@ -717,7 +717,11 @@ async def update_user(
 
     update_data = payload.model_dump(exclude_unset=True)
     employee_id = update_data.pop("employee_id", None)
+    
+    has_position_update = "position_name" in update_data
     position_name = update_data.pop("position_name", None)
+    
+    has_reports_to_update = "reports_to_position_id" in update_data
     reports_to_position_id = update_data.pop("reports_to_position_id", None)
 
     # Process username update
@@ -813,38 +817,45 @@ async def update_user(
     await _sync_employee_link(db, user, employee_id)
     await db.flush()
 
-    if position_name:
-        import re
-        pos_code = re.sub(r'[^a-z0-9]+', '_', position_name.lower()).strip('_')
-        norm_name = "".join(position_name.lower().split())
-        position = (await db.execute(
-            select(Position).where(
-                or_(
-                    func.replace(func.lower(Position.name), ' ', '') == norm_name,
-                    func.lower(Position.code) == pos_code,
-                    func.lower(Position.code) == position_name.lower()
+    if has_position_update:
+        if position_name:
+            import re
+            pos_code = re.sub(r'[^a-z0-9]+', '_', position_name.lower()).strip('_')
+            norm_name = "".join(position_name.lower().split())
+            position = (await db.execute(
+                select(Position).where(
+                    or_(
+                        func.replace(func.lower(Position.name), ' ', '') == norm_name,
+                        func.lower(Position.code) == pos_code,
+                        func.lower(Position.code) == position_name.lower()
+                    )
+                ).order_by(Position.id.asc())
+            )).scalars().first()
+            if not position:
+                position = Position(
+                    name=position_name,
+                    code=pos_code,
+                    department=user.department,
+                    parent_position_id=reports_to_position_id
                 )
-            ).order_by(Position.id.asc())
-        )).scalars().first()
-        if not position:
-            position = Position(
-                name=position_name,
-                code=pos_code,
-                department=user.department,
-                parent_position_id=reports_to_position_id
-            )
-            db.add(position)
-            await db.flush()
-        else:
-            if reports_to_position_id:
-                position.parent_position_id = reports_to_position_id
-            await db.flush()
-            
-        if user.employee_id:
-            emp = (await db.execute(select(Employee).where(Employee.id == user.employee_id))).scalar_one_or_none()
-            if emp:
-                emp.position_id = position.id
+                db.add(position)
                 await db.flush()
+            else:
+                if has_reports_to_update:
+                    position.parent_position_id = reports_to_position_id
+                await db.flush()
+                
+            if user.employee_id:
+                emp = (await db.execute(select(Employee).where(Employee.id == user.employee_id))).scalar_one_or_none()
+                if emp:
+                    emp.position_id = position.id
+                    await db.flush()
+        else:
+            if user.employee_id:
+                emp = (await db.execute(select(Employee).where(Employee.id == user.employee_id))).scalar_one_or_none()
+                if emp:
+                    emp.position_id = None
+                    await db.flush()
 
     # Reload with roles, warehouses, and projects
     result = await db.execute(

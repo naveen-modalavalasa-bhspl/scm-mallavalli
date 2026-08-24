@@ -144,7 +144,10 @@ const UserForm = () => {
       const payload = {
         ...values,
         phone: values.phone ? values.phone.replace(/[\s\-()]/g, '') : values.phone,
-        warehouse_assignments
+        warehouse_assignments,
+        position_name: values.position_name || null,
+        reports_to_position_id: values.reports_to_position_id || null,
+        role_ids: values.role_ids || [],
       };
       // Remove form fields that aren't part of the API payload
       // role_ids is handled by the API via role_ids key — keep it

@@ -300,7 +300,7 @@ async def allowed_keys_for_role(db: AsyncSession, role: Role) -> List[str]:
 
 
 async def _resolve_active_role(db: AsyncSession, user: User) -> Role:
-    position_role = await sync_user_position_role(db, user)
+    position_role, _ = await sync_user_position_role(db, user)
     if position_role is not None:
         return position_role
 
@@ -405,7 +405,7 @@ async def switch_active_position(
     db.add(employee)
 
     # Sync role and user active_role_id
-    role = await sync_user_position_role(db, current_user)
+    role, _ = await sync_user_position_role(db, current_user)
     if not role:
         raise HTTPException(422, 'The selected position does not have an active role')
 
