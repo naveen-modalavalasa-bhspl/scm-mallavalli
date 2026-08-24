@@ -303,11 +303,7 @@ def _employee_directory_payload(employee, position=None, role=None, login_user=N
     }
 
 
-@router.get("/positions", tags=["Settings", "Positions"])
-async def get_positions(db: AsyncSession = Depends(get_db)):
-    """Fetch all existing positions for assignment."""
-    positions = (await db.execute(select(Position).order_by(Position.name))).scalars().all()
-    return [{"id": p.id, "name": p.name} for p in positions]
+
 
 
 @router.post("", response_model=UserResponse, status_code=201)
@@ -1328,6 +1324,24 @@ def _position_payload(
         "employee_name": employee_name,
         "employee_code": employee_code,
     }
+
+
+@router.get("/positions/dropdown")
+async def get_positions_dropdown(db: AsyncSession = Depends(get_db)):
+    """Fetch all existing positions for assignment dropdowns (lightweight)."""
+    positions = (await db.execute(select(Position.id, Position.name).order_by(Position.name))).all()
+    
+    unique_positions = []
+    seen_names = set()
+    for p in positions:
+        if not p.name:
+            continue
+        name_lower = p.name.lower().strip()
+        if name_lower not in seen_names:
+            seen_names.add(name_lower)
+            unique_positions.append({"id": p.id, "name": p.name})
+            
+    return unique_positions
 
 
 @router.get("/positions")

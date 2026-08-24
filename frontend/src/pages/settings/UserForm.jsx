@@ -46,12 +46,12 @@ const UserForm = () => {
 
   const fetchLookups = useCallback(async () => {
     try {
-      const [roleRes, whRes, projRes, posRes] = await Promise.allSettled([
-        api.get('/settings/roles', { params: { page_size: 200 } }),
-        api.get('/masters/warehouses', { params: { page_size: 500 } }),
-        api.get('/masters/projects', { params: { page_size: 500 } }),
-        api.get('/users/positions', { params: { page_size: 500 } }),
-      ]);
+        const [roleRes, whRes, projRes, posRes] = await Promise.allSettled([
+          api.get('/settings/roles', { params: { page_size: 500 } }),
+          api.get('/masters/warehouses', { params: { page_size: 500 } }),
+          api.get('/masters/projects', { params: { page_size: 500 } }),
+          api.get('/users/positions/dropdown'),
+        ]);
       if (roleRes.status === 'fulfilled') {
         const d = roleRes.value.data;
         setRoles((d.items || d.data || d || []).map((r) => ({ label: `${r.code || r.name} - ${r.name}`, value: r.id, name: r.name, code: r.code })));
