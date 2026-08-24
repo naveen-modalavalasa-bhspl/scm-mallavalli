@@ -8,6 +8,7 @@ Supports:
 """
 
 import asyncio
+import logging
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -135,6 +136,24 @@ def do_run_migrations(connection):
 
     if _os.getenv("ALEMBIC_STRICT_DDL", "").strip() not in ("1", "true", "True"):
         _install_idempotent_ddl()
+
+    # Reconcile the version pointer BEFORE configuring the migration context,
+    # so the context reads the corrected revision. A database whose schema is
+    # already ahead of its pointer gets stamped instead of replayed; see
+    # app/utils/alembic_baseline.py for why replaying cannot work here.
+    try:
+        from alembic.script import ScriptDirectory
+        from app.utils.alembic_baseline import reconcile_version
+
+        reconcile_version(
+            connection,
+            target_metadata,
+            ScriptDirectory.from_config(config).get_current_head(),
+        )
+    except Exception:  # never block a deploy on the reconciliation itself
+        logging.getLogger("alembic.baseline").exception(
+            "version reconciliation failed; continuing with the normal upgrade path"
+        )
 
     context.configure(
         connection=connection,
