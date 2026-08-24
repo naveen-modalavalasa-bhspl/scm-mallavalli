@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Space, Tooltip, Tag, App } from 'antd';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { Button, Space, Tooltip, Tag, App, Popconfirm } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import PageHeader from '../../../components/PageHeader';
 import DataTable from '../../../components/DataTable';
 import { formatDate } from '../../../utils/helpers';
@@ -24,6 +24,16 @@ const ProjectIndentTemplateList = ({ title = "Template Master for DP Project" })
 
   const handleEdit = (record) => {
     navigate(`/inventory/masters/project-templates/edit/${record.id}`);
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/masters/project-indent-templates/${id}`);
+      message.success('Template deleted successfully');
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      message.error(getErrorMessage(error));
+    }
   };
 
   const columns = [
@@ -90,6 +100,22 @@ const ProjectIndentTemplateList = ({ title = "Template Master for DP Project" })
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             />
+          </Tooltip>
+          <Tooltip title="Delete template">
+            <Popconfirm
+              title="Delete this template?"
+              description="Are you sure you want to delete this template?"
+              onConfirm={() => handleDelete(record.id)}
+              okText="Yes"
+              cancelText="No"
+              placement="left"
+            >
+              <Button
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
           </Tooltip>
         </Space>
       ),

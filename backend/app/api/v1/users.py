@@ -358,7 +358,16 @@ async def create_user(
     if payload.position_name:
         import re
         pos_code = re.sub(r'[^a-z0-9]+', '_', payload.position_name.lower()).strip('_')
-        position = (await db.execute(select(Position).where(Position.code == pos_code))).scalar_one_or_none()
+        norm_name = "".join(payload.position_name.lower().split())
+        position = (await db.execute(
+            select(Position).where(
+                or_(
+                    func.replace(func.lower(Position.name), ' ', '') == norm_name,
+                    func.lower(Position.code) == pos_code,
+                    func.lower(Position.code) == payload.position_name.lower()
+                )
+            ).order_by(Position.id.asc())
+        )).scalars().first()
         if not position:
             position = Position(
                 name=payload.position_name,
@@ -807,7 +816,16 @@ async def update_user(
     if position_name:
         import re
         pos_code = re.sub(r'[^a-z0-9]+', '_', position_name.lower()).strip('_')
-        position = (await db.execute(select(Position).where(Position.code == pos_code))).scalar_one_or_none()
+        norm_name = "".join(position_name.lower().split())
+        position = (await db.execute(
+            select(Position).where(
+                or_(
+                    func.replace(func.lower(Position.name), ' ', '') == norm_name,
+                    func.lower(Position.code) == pos_code,
+                    func.lower(Position.code) == position_name.lower()
+                )
+            ).order_by(Position.id.asc())
+        )).scalars().first()
         if not position:
             position = Position(
                 name=position_name,
@@ -1336,7 +1354,8 @@ async def get_positions_dropdown(db: AsyncSession = Depends(get_db)):
     for p in positions:
         if not p.name:
             continue
-        name_lower = p.name.lower().strip()
+        # Remove all whitespace for stricter deduplication
+        name_lower = "".join(p.name.lower().split())
         if name_lower not in seen_names:
             seen_names.add(name_lower)
             unique_positions.append({"id": p.id, "name": p.name})
@@ -2461,7 +2480,7 @@ async def _position_id_from_external(db: AsyncSession, row: dict, stats: dict[st
             role_name=_external_text(row, "position.role_name", "role_name", "roleName", "role", max_len=100),
             role_id=role_id,
             level_name=_external_text(row, "position.level_name", "level_name", "levelName", "position_level", "positionLevel", max_len=50),
-            department=_external_text(row, "position.department", "department", "department_name", "departmentName", max_len=100),
+            department=_external_text(row, "position.department_name", "position.departmentName", "department_name", "departmentName", "position.department", "department", max_len=100),
             section=_external_text(row, "position.section", "section", "section_name", "sectionName", max_len=100),
             project_id=project_id,
             office_id=office_id,
@@ -2491,7 +2510,7 @@ async def _position_id_from_external(db: AsyncSession, row: dict, stats: dict[st
         position.role_name = _external_text(row, "position.role_name", "role_name", "roleName", "role", max_len=100) or position.role_name
         position.role_id = role_id or position.role_id
         position.level_name = _external_text(row, "position.level_name", "level_name", "levelName", "position_level", "positionLevel", max_len=50) or position.level_name
-        position.department = _external_text(row, "position.department", "department", "department_name", "departmentName", max_len=100) or position.department
+        position.department = _external_text(row, "position.department_name", "position.departmentName", "department_name", "departmentName", "position.department", "department", max_len=100) or position.department
         position.section = _external_text(row, "position.section", "section", "section_name", "sectionName") or position.section
         position.project_id = project_id or position.project_id
         position.office_id = office_id or position.office_id

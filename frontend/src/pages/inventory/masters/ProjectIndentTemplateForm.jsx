@@ -19,6 +19,7 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
   const [projects, setProjects] = useState([]);
   const [uoms, setUoms] = useState([]);
   const [existingProjectItems, setExistingProjectItems] = useState(new Map());
+  const [itemSearchText, setItemSearchText] = useState('');
 
   const fetchExistingProjectItems = useCallback(async (projectId, currentTemplateId = id) => {
     if (!projectId) {
@@ -91,6 +92,8 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
           template_name: data.template_name,
           items: (data.items || []).map((c) => ({
             item_id: c.item_id,
+            item_name: c.item_name,
+            item_code: c.item_code,
             quantity: Number(c.quantity) || 1,
             uom_id: c.uom_id,
           })),
@@ -148,6 +151,8 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
       currentItems[index] = {
         ...currentItems[index],
         item_id: undefined,
+        item_name: undefined,
+        item_code: undefined,
         uom_id: undefined,
       };
       form.setFieldsValue({ items: currentItems });
@@ -168,6 +173,8 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
         currentItems[index] = {
           ...currentItems[index],
           item_id: undefined,
+          item_name: undefined,
+          item_code: undefined,
           uom_id: undefined,
         };
         form.setFieldsValue({ items: currentItems });
@@ -185,6 +192,8 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
         currentItems[index] = {
           ...currentItems[index],
           item_id: undefined,
+          item_name: undefined,
+          item_code: undefined,
           uom_id: undefined,
         };
         form.setFieldsValue({ items: currentItems });
@@ -195,6 +204,8 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
     currentItems[index] = {
       ...currentItems[index],
       item_id: val,
+      item_name: itemObj?.item_name || itemObj?.name || '',
+      item_code: itemObj?.item_code || itemObj?.code || '',
       uom_id: itemObj?.primary_uom_id || currentItems[index]?.uom_id || undefined,
     };
     form.setFieldsValue({ items: currentItems });
@@ -299,11 +310,23 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
             </Row>
 
             <div style={{ marginTop: 24 }}>
-              <span style={{ fontWeight: 'bold', fontSize: 16 }}>Template Items & Fixed Quantities</span>
-              <p style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4 }}>
-                Note: Each item can only be part of one template per project.
-              </p>
-              <div style={{ marginTop: 12 }}>
+              <Row justify="space-between" align="middle">
+                <Col>
+                  <span style={{ fontWeight: 'bold', fontSize: 16 }}>Template Items & Fixed Quantities</span>
+                  <p style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+                    Note: Each item can only be part of one template per project.
+                  </p>
+                </Col>
+                <Col>
+                  <Input.Search
+                    placeholder="Search in added items..."
+                    allowClear
+                    onChange={(e) => setItemSearchText(e.target.value)}
+                    style={{ width: 250 }}
+                  />
+                </Col>
+              </Row>
+              <div style={{ marginTop: 16 }}>
                 <Form.List
                   name="items"
                   rules={[
@@ -322,9 +345,18 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
 
                     return (
                       <>
-                        {fields.map(({ key, name, ...restField }, index) => {
+                        {fields.filter(field => {
+                          if (!itemSearchText) return true;
+                          const currentItem = currentFormItems[field.name];
+                          if (!currentItem) return true;
+                          if (!currentItem.item_id) return true;
+                          const itemName = (currentItem.item_name || '').toLowerCase();
+                          const itemCode = (currentItem.item_code || '').toLowerCase();
+                          const searchLower = itemSearchText.toLowerCase();
+                          return itemName.includes(searchLower) || itemCode.includes(searchLower);
+                        }).map(({ key, name, ...restField }) => {
                           const selectedInOtherRows = currentFormItems
-                            .map((item, idx) => (idx !== index ? item?.item_id : null))
+                            .map((item, idx) => (idx !== name ? item?.item_id : null))
                             .filter(Boolean);
                           const excludeIds = [...priorInProject, ...selectedInOtherRows];
 
@@ -340,7 +372,7 @@ const ProjectIndentTemplateForm = ({ title = "Template Master for DP Project" })
                                   <ItemSelector
                                     placeholder="Search item..."
                                     excludeIds={excludeIds}
-                                    onChange={(val, itemObj) => handleItemChange(val, itemObj, index, remove, fields.length)}
+                                    onChange={(val, itemObj) => handleItemChange(val, itemObj, name, remove, fields.length)}
                                   />
                                 </Form.Item>
                               </Col>

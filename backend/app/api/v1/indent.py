@@ -2556,6 +2556,10 @@ async def list_material_acknowledgements(
         query = query.join(VehicleIssue).where(VehicleIssue.issue_number.ilike(f"%{search}%") | MaterialAcknowledgement.acknowledgement_number.ilike(f"%{search}%"))
         count_query = count_query.join(VehicleIssue).where(VehicleIssue.issue_number.ilike(f"%{search}%") | MaterialAcknowledgement.acknowledgement_number.ilike(f"%{search}%"))
 
+    if not await user_is_managerial(db, current_user.id):
+        query = query.where(MaterialAcknowledgement.acknowledged_by == current_user.id)
+        count_query = count_query.where(MaterialAcknowledgement.acknowledged_by == current_user.id)
+
     total = (await db.execute(count_query)).scalar()
     result = await db.execute(query.offset(offset).limit(limit).order_by(MaterialAcknowledgement.id.desc()))
     acks = result.scalars().all()

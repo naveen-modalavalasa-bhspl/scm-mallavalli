@@ -383,7 +383,12 @@ const UserForm = () => {
           <Row gutter={16}>
             <Col xs={24} sm={12}>
               <Form.Item name="position_name" label="Position Name">
-                <Input placeholder="Enter position name" />
+                <Select
+                  showSearch
+                  allowClear
+                  options={positions.map(p => ({ label: p.label, value: p.label }))}
+                  placeholder="Select position name"
+                />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>
