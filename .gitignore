@@ -87,8 +87,8 @@ scratch/
 # ==============================================================================
 # Docker Configs
 # ==============================================================================
-Dockerfile
-Dockerfile.*
-.dockerignore
-docker-compose*.yml
-docker-compose*.yaml
+# Build configs are tracked on purpose: every instance must build from the same
+# Dockerfile and .dockerignore. Untracked build files let a server's tree drift
+# from the repo, which is how an uncommitted migration got baked into an image.
+# Secrets stay out via the .env rules above -- compose reads them from the
+# environment, never from a committed file.

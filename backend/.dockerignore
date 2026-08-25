@@ -1,0 +1,34 @@
+# Keep the build context to what the image actually needs. The Dockerfile
+# copies alembic/ and app/ wholesale, so anything left lying around in a build
+# host's working tree gets baked in -- including compiled bytecode for
+# migrations that no longer exist. See app/utils/alembic_preflight.py.
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local virtualenvs
+.venv/
+venv/
+env/
+
+# Secrets and local config: the image gets these from the environment.
+.env
+.env.*
+!.env.example
+
+# Local state that must never ship in an image
+uploads/
+*.log
+*.sqlite
+*.db
+
+# VCS and editor noise
+.git/
+.gitignore
+.idea/
+.vscode/
+*.swp
