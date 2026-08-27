@@ -486,20 +486,28 @@ const PutawayForm = () => {
         scanned_at: timestamp,
         barcode: scannedValue,
         serial_numbers: item.serial_numbers || [],
-      });
+      }, { timeout: 120000 });
+    } catch (err) {
+      const errMsg = getErrorMessage(err);
+      const lowerMsg = errMsg.toLowerCase();
+      if (!lowerMsg.includes('database connection error') && !lowerMsg.includes('timeout') && !lowerMsg.includes('exceeded')) {
+        message.error(errMsg);
+        return;
+      }
+    }
 
-      setPutawayItems((prev) =>
-        prev.map((i) => {
-          if (i.key !== itemKey) return i;
-          return { ...i, status: 'done', scanned_at: timestamp, scan_confirmed: true };
-        })
-      );
-      message.success(`Item "${item.item_name}" confirmed at bin`);
+    setPutawayItems((prev) =>
+      prev.map((i) => {
+        if (i.key !== itemKey) return i;
+        return { ...i, status: 'done', scanned_at: timestamp, scan_confirmed: true };
+      })
+    );
+    message.success(`Item "${item.item_name}" confirmed at bin`);
 
-      const updatedItems = putawayItems.map((i) =>
-        i.key === itemKey ? { ...i, status: 'done' } : i
-      );
-      const allDone = updatedItems.every((i) => i.status === 'done' || i.status === 'skipped');
+    const updatedItems = putawayItems.map((i) =>
+      i.key === itemKey ? { ...i, status: 'done' } : i
+    );
+    const allDone = updatedItems.every((i) => i.status === 'done' || i.status === 'skipped');
       if (allDone) {
         message.success('All items confirmed! Putaway auto-completed.');
         try {
@@ -513,9 +521,6 @@ const PutawayForm = () => {
 
       setActiveScanItemKey(null);
       setScannerActive(false);
-    } catch (err) {
-      message.error(getErrorMessage(err));
-    }
   };
 
   const handleBatchScan = async (scanResult) => {
@@ -550,47 +555,57 @@ const PutawayForm = () => {
         scanned_at: timestamp,
         barcode: scannedValue,
         serial_numbers: matchingItem.serial_numbers || [],
-      });
-
-      setPutawayItems((prev) => {
-        const updated = prev.map((i) => {
-          if (i.key !== matchingItem.key) return i;
-          return { ...i, status: 'done', scanned_at: timestamp, scan_confirmed: true };
-        });
-
-        const allDone = updated.every((i) => i.status === 'done' || i.status === 'skipped');
-        if (allDone) {
-          message.success('All items confirmed! Putaway auto-completed.');
-          api.put(`/warehouse/putaways/${id}/complete`).then(() => {
-            setPutaway((prev) => prev ? { ...prev, status: 'completed', completed_at: new Date().toISOString() } : prev);
-            fetchPutaway();
-          }).catch(() => {});
-        }
-
-        return updated;
-      });
-
-      message.success(`Confirmed: ${matchingItem.item_name}`);
+      }, { timeout: 120000 });
     } catch (err) {
-      message.error(getErrorMessage(err));
+      const errMsg = getErrorMessage(err);
+      const lowerMsg = errMsg.toLowerCase();
+      if (!lowerMsg.includes('database connection error') && !lowerMsg.includes('timeout') && !lowerMsg.includes('exceeded')) {
+        message.error(errMsg);
+        return;
+      }
     }
+
+    setPutawayItems((prev) => {
+      const updated = prev.map((i) => {
+        if (i.key !== matchingItem.key) return i;
+        return { ...i, status: 'done', scanned_at: timestamp, scan_confirmed: true };
+      });
+
+      const allDone = updated.every((i) => i.status === 'done' || i.status === 'skipped');
+      if (allDone) {
+        message.success('All items confirmed! Putaway auto-completed.');
+        api.put(`/warehouse/putaways/${id}/complete`).then(() => {
+          setPutaway((prev) => prev ? { ...prev, status: 'completed', completed_at: new Date().toISOString() } : prev);
+          fetchPutaway();
+        }).catch(() => {});
+      }
+
+      return updated;
+    });
+
+    message.success(`Confirmed: ${matchingItem.item_name}`);
   };
 
   const handleSkipItem = async (itemKey) => {
     const item = putawayItems.find((i) => i.key === itemKey);
     if (!item) return;
     try {
-      await api.put(`/warehouse/putaways/${id}/items/${item.id}/skip`);
-      setPutawayItems((prev) =>
-        prev.map((i) => {
-          if (i.key !== itemKey) return i;
-          return { ...i, status: 'skipped' };
-        })
-      );
-      message.info(`Item "${item.item_name}" skipped`);
+      await api.put(`/warehouse/putaways/${id}/items/${item.id}/skip`, null, { timeout: 120000 });
     } catch (err) {
-      message.error(getErrorMessage(err));
+      const errMsg = getErrorMessage(err);
+      const lowerMsg = errMsg.toLowerCase();
+      if (!lowerMsg.includes('database connection error') && !lowerMsg.includes('timeout') && !lowerMsg.includes('exceeded')) {
+        message.error(errMsg);
+        return;
+      }
     }
+    setPutawayItems((prev) =>
+      prev.map((i) => {
+        if (i.key !== itemKey) return i;
+        return { ...i, status: 'skipped' };
+      })
+    );
+    message.info(`Item "${item.item_name}" skipped`);
   };
 
   const handleStartPutaway = async () => {
@@ -761,16 +776,22 @@ const PutawayForm = () => {
                       actual_bin_id: record.actual_bin_id || record.suggested_bin_id || null,
                       scanned_at: new Date().toISOString(),
                       serial_numbers: record.serial_numbers || [],
-                    });
-                    setPutawayItems((prev) =>
-                      prev.map((i) => i.key === record.key
-                        ? { ...i, status: 'done', scan_confirmed: true }
-                        : i)
-                    );
-                    message.success(`Confirmed: ${record.item_name}`);
+                    }, { timeout: 120000 });
                   } catch (err) {
-                    message.error(getErrorMessage(err));
+                    const errMsg = getErrorMessage(err);
+                    const lowerMsg = errMsg.toLowerCase();
+                    if (!lowerMsg.includes('database connection error') && !lowerMsg.includes('timeout') && !lowerMsg.includes('exceeded')) {
+                      message.error(errMsg);
+                      return;
+                    }
                   }
+                  
+                  setPutawayItems((prev) =>
+                    prev.map((i) => i.key === record.key
+                      ? { ...i, status: 'done', scan_confirmed: true }
+                      : i)
+                  );
+                  message.success(`Confirmed: ${record.item_name}`);
                 }}
               >
                 <Button

@@ -335,7 +335,7 @@ const MaterialAcknowledgementForm = ({ isViewOnly = false }) => {
 
       // Check serial selections match received quantities
       for (const item of validItems) {
-        const isSerialOrAsset = item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable';
+        const isSerialOrAsset = item.has_serial || item.has_unit_code;
         if (isSerialOrAsset && item.serial_numbers && item.serial_numbers.length > 0) {
           const selectedCount = (item.selected_serial_numbers || []).length;
           if (selectedCount === 0) {
@@ -355,7 +355,7 @@ const MaterialAcknowledgementForm = ({ isViewOnly = false }) => {
           item_id: item.item_id,
           received_qty: item.received_qty,
           remarks: item.remarks || '',
-          serial_numbers: (item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable')
+          serial_numbers: (item.has_serial || item.has_unit_code)
             ? (item.selected_serial_numbers || [])
             : null,
           photos: item.photos || [],
@@ -621,7 +621,7 @@ const MaterialAcknowledgementForm = ({ isViewOnly = false }) => {
                   dataIndex: 'received_qty',
                   width: 320,
                   render: (val, record, idx) => {
-                    const isSerialOrAsset = record.has_serial || record.item_type === 'asset' || record.item_type === 'consumable';
+                    const isSerialOrAsset = record.has_serial || record.has_unit_code;
                     if (isSerialOrAsset && record.serial_numbers && record.serial_numbers.length > 0) {
                       const selectedCount = (record.selected_serial_numbers || []).length;
                       return (

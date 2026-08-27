@@ -342,6 +342,7 @@ const ItemDetail = () => {
               { label: "Has Batch", value: item.has_batch ? "Yes" : "No" },
               { label: "Has Serial", value: item.has_serial ? "Yes" : "No" },
               { label: "Has Expiry", value: item.has_expiry ? "Yes" : "No" },
+              { label: "Generate Unit Code", value: item.has_unit_code ? "Yes" : "No" },
               { label: "Shelf Life", value: item.shelf_life_days ? `${item.shelf_life_days} days` : null },
               { label: "Safety Stock", value: item.safety_stock != null ? String(item.safety_stock) : null },
               { label: "Reorder Level", value: item.reorder_level != null ? String(item.reorder_level) : null },

@@ -413,6 +413,7 @@ class MaterialIssueItemResponse(BaseModel):
     item_type: Optional[str] = None
     packed_qty: Decimal = Decimal("0")
     packed_serials: List[str] = []
+    has_unit_code: bool = False
     # Non-central WH traceability text fields
     batch_number_text: Optional[str] = None
     bin_code_text: Optional[str] = None
@@ -1058,6 +1059,7 @@ class VehicleIssueItemResponse(BaseModel):
     has_serial: bool = False
     has_batch: bool = False
     item_type: Optional[str] = None
+    has_unit_code: bool = False
     batch_number_text: Optional[str] = None
     bin_code_text: Optional[str] = None
 

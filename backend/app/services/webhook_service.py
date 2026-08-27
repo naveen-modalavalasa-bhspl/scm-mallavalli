@@ -269,11 +269,13 @@ async def trigger_acknowledgement_webhook(ack_id: int):
                         asset_code = sn_rec.asset_code if sn_rec else None
                         consumable_code = sn_rec.consumable_code if sn_rec else None
 
-                        # Address data quality: generate code if missing
-                        if ai.item.item_type == "asset" and not asset_code:
-                            asset_code = generate_asset_code(sn_str, ai.item.item_code)
-                        elif ai.item.item_type == "consumable" and not consumable_code:
-                            consumable_code = generate_asset_code(sn_str, ai.item.item_code)
+                        # Address data quality: generate code if missing, but
+                        # only for items opted into unit codes (Tracking tab).
+                        if getattr(ai.item, "has_unit_code", False):
+                            if ai.item.item_type == "asset" and not asset_code:
+                                asset_code = generate_asset_code(sn_str, ai.item.item_code)
+                            elif ai.item.item_type == "consumable" and not consumable_code:
+                                consumable_code = generate_asset_code(sn_str, ai.item.item_code)
 
                         serials_list.append({
                             "serial_id": serial_id,

@@ -467,6 +467,7 @@ async def list_indents(
                     data["items"][i]["item_code"] = item.item.item_code
                     data["items"][i]["item_type"] = item.item.item_type
                     data["items"][i]["has_serial"] = bool(getattr(item.item, "has_serial", False))
+                    data["items"][i]["has_unit_code"] = bool(getattr(item.item, "has_unit_code", False))
 
                 if item.uom:
                     data["items"][i]["uom"] = item.uom.name
@@ -651,6 +652,7 @@ async def get_indent(
                 data["items"][i]["item_code"] = item.item.item_code
                 data["items"][i]["item_type"] = item.item.item_type
                 data["items"][i]["has_serial"] = bool(getattr(item.item, "has_serial", False))
+                data["items"][i]["has_unit_code"] = bool(getattr(item.item, "has_unit_code", False))
                 # Enrich with master flags so MI prefill can decide whether
 
                 # batch is mandatory and what rate to seed.

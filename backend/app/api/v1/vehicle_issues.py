@@ -399,6 +399,7 @@ async def list_vehicle_issues(
                     "rate": float(item.rate or 0),
                     "amount": float(item.amount or 0),
                     "has_serial": bool(item.item.has_serial) if item.item else False,
+                    "has_unit_code": bool(getattr(item.item, "has_unit_code", False)) if item.item else False,
                     "has_batch": bool(item.item.has_batch) if item.item else False,
                     "item_type": item.item.item_type if item.item else None,
                     "serial_numbers": item.serial_numbers,
@@ -496,6 +497,7 @@ async def get_vehicle_issue(
         response["items"][i]["batch_number"] = item.batch.batch_number if item.batch else None
         response["items"][i]["expiry_date"] = item.batch.expiry_date.strftime("%d-%b-%Y") if (item.batch and item.batch.expiry_date) else None
         response["items"][i]["has_serial"] = bool(item.item.has_serial) if item.item else False
+        response["items"][i]["has_unit_code"] = bool(getattr(item.item, "has_unit_code", False)) if item.item else False
         response["items"][i]["has_batch"] = bool(item.item.has_batch) if item.item else False
 
     return response

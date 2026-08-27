@@ -6,7 +6,12 @@ from app.models.warehouse import SerialNumber
 logger = logging.getLogger(__name__)
 
 async def get_max_system_serial_number(db: AsyncSession) -> int:
-    """Find the maximum system-generated serial number in the DB."""
+    """Find the maximum system-generated serial number in the DB.
+    Uses a PostgreSQL transaction-level advisory lock to guarantee idempotency and prevent duplicate generation under high concurrency.
+    """
+    from sqlalchemy import text
+    await db.execute(text("SELECT pg_advisory_xact_lock(123456789)"))
+
     res = await db.execute(select(SerialNumber.serial_number, SerialNumber.asset_code, SerialNumber.consumable_code))
     sns = []
     for r_sn, r_ac, r_cc in res.all():

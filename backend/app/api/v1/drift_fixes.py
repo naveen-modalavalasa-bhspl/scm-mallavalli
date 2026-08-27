@@ -559,7 +559,7 @@ async def stock_balance_breakdown(
     is_asset_or_consumable = False
     if rows and rows[0].item:
         is_serial_tracked = bool(rows[0].item.has_serial)
-        is_asset_or_consumable = rows[0].item.item_type in ("asset", "consumable")
+        is_asset_or_consumable = bool(getattr(rows[0].item, "has_unit_code", False))
         
     serials_map = {}
     asset_codes_map = {}
@@ -617,7 +617,9 @@ async def stock_balance_breakdown(
                         act_consumable_code = raw_serial
                     raw_serial = raw_serial[len(new_prefix):]
                     
-            if s.item:
+            # Display-time fallback for rows stored before a code was minted.
+            # Mirrors the putaway rule: only items opted into unit codes.
+            if s.item and getattr(s.item, "has_unit_code", False):
                 if s.item.item_type == "asset" and not act_asset_code:
                     act_asset_code = generate_asset_code(raw_serial, s.item.item_code)
                 elif s.item.item_type == "consumable" and not act_consumable_code:
@@ -639,8 +641,11 @@ async def stock_balance_breakdown(
         acs = list(asset_codes_map.get(key, []))
         ccs = list(consumable_codes_map.get(key, []))
         
-        # If the item is asset or consumable, and the database has NO serials/codes:
-        if r.item and r.item.item_type in ("asset", "consumable") and not sns and not acs and not ccs:
+        # If the item is opted into unit codes and the database has NO
+        # serials/codes, mint the missing rows.
+        if (r.item and getattr(r.item, "has_unit_code", False)
+                and r.item.item_type in ("asset", "consumable")
+                and not sns and not acs and not ccs):
             qty_int = int(r.total_qty)
             if qty_int > 0:
                 from app.models.warehouse import SerialNumber as DB_SerialNumber

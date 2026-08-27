@@ -87,7 +87,7 @@ const VehicleStockLedger = () => {
       const data = res.data;
       const items = data.items || data.data || data || [];
       const exportData = items.map((r) => ({
-        'Time Stamp': r.posting_date ? formatDateTime(r.posting_date) : '',
+        'Time Stamp': r.created_at ? formatDateTime(r.created_at) : '',
         'Vehicle Code': r.vehicle_code || '',
         'Vehicle Number': r.vehicle_number || '',
         'Item Code': r.item_code || '',
@@ -124,7 +124,7 @@ const VehicleStockLedger = () => {
   const columns = [
     {
       title: 'Time Stamp',
-      dataIndex: 'posting_date',
+      dataIndex: 'created_at',
       width: 180,
       fixed: 'left',
       sorter: true,

@@ -651,6 +651,9 @@ async def _bulk_upload_items_impl(
                 has_batch=r_data["has_batch"],
                 has_serial=r_data["has_serial"],
                 has_expiry=r_data["has_expiry"],
+                # The sheet has no column for this yet, so default it the way
+                # the old item_type rule behaved.
+                has_unit_code=r_data["item_type"] in ("asset", "consumable"),
                 shelf_life_days=r_data["shelf_life_days"],
                 dosage_form=r_data["dosage_form"] or ("unit" if r_data["item_type"] == "equipment" else None),
                 valuation_method=r_data["valuation_method"],

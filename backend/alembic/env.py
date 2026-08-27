@@ -180,6 +180,13 @@ async def run_async_migrations() -> None:
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
+        # SQLAlchemy 2.0 is commit-as-you-go: leaving this block without an
+        # explicit commit ROLLS BACK. MySQL auto-commits DDL, so the tables and
+        # columns survived and only the plain-DML writes were lost — which is
+        # exactly the alembic_version pointer and any data backfill a migration
+        # performs. That is why upgrades appeared to "work" while the pointer
+        # never moved and UPDATE-based backfills silently did nothing.
+        await connection.commit()
     await connectable.dispose()
 
 
@@ -194,6 +201,10 @@ def run_migrations_online() -> None:
     )
     with connectable.connect() as connection:
         do_run_migrations(connection)
+        # See run_async_migrations: without this the alembic_version write and
+        # every data backfill are rolled back on block exit, while the DDL
+        # stays because MySQL auto-commits it.
+        connection.commit()
     connectable.dispose()
 
 

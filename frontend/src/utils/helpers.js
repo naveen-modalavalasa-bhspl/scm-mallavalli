@@ -459,7 +459,7 @@ export const exportDetailsToExcel = (record, type) => {
     `;
 
     const serials = item.serial_numbers || [];
-    const isSerialOrAsset = serials.length > 0 || item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable';
+    const isSerialOrAsset = serials.length > 0 || item.has_serial || item.has_unit_code;
     if (isSerialOrAsset) {
       if (serials.length > 0) {
         serials.forEach((serial, sIdx) => {
@@ -574,7 +574,7 @@ export const printDetailsToPDF = (record, type) => {
     `;
 
     const serials = item.serial_numbers || [];
-    const isSerialOrAsset = serials.length > 0 || item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable';
+    const isSerialOrAsset = serials.length > 0 || item.has_serial || item.has_unit_code;
     if (isSerialOrAsset) {
       if (serials.length > 0) {
         serials.forEach((serial, sIdx) => {
@@ -783,7 +783,7 @@ export const exportGlobalToExcel = (records, type) => {
       `;
 
       const serials = item.serial_numbers || [];
-      const isSerialOrAsset = serials.length > 0 || item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable';
+      const isSerialOrAsset = serials.length > 0 || item.has_serial || item.has_unit_code;
       if (isSerialOrAsset) {
         const serials = item.serial_numbers || [];
         if (serials.length > 0) {
@@ -910,7 +910,7 @@ export const printGlobalToPDF = (records, type) => {
       `;
 
       const serials = item.serial_numbers || [];
-      const isSerialOrAsset = serials.length > 0 || item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable';
+      const isSerialOrAsset = serials.length > 0 || item.has_serial || item.has_unit_code;
       if (isSerialOrAsset) {
         const serials = item.serial_numbers || [];
         if (serials.length > 0) {

@@ -67,6 +67,10 @@ class MaterialIssueItem(Base):
     batch = relationship("Batch")
     bin = relationship("WarehouseBin")
 
+    @property
+    def has_unit_code(self) -> bool:
+        return bool(getattr(self.item, "has_unit_code", False)) if self.item else False
+
 
 # =============================================================
 # Wave 5 — Issue returns (BUG-ISS-063). When a department/ward returns
@@ -161,6 +165,10 @@ class VehicleIssueItem(Base):
     uom = relationship("UOM")
     batch = relationship("Batch")
     bin = relationship("WarehouseBin")
+
+    @property
+    def has_unit_code(self) -> bool:
+        return bool(getattr(self.item, "has_unit_code", False)) if self.item else False
 
 
 class MaterialAcknowledgement(Base):

@@ -1515,11 +1515,14 @@ async def confirm_putaway_item(
     )
 
     if payload.status == "done":
+        # Unit codes are opt-in per item (Tracking tab), not implied by
+        # item_type. item_type still decides which column the code lands in.
+        wants_unit_code = bool(getattr(pi.item, "has_unit_code", False)) if (pi and pi.item) else False
         is_asset = (pi.item.item_type == "asset") if (pi and pi.item) else False
         is_consumable = (pi.item.item_type == "consumable") if (pi and pi.item) else False
         material_code = pi.item.item_code if (pi and pi.item) else ""
-        
-        if is_asset or is_consumable:
+
+        if wants_unit_code:
             from app.services.asset_service import get_max_system_serial_number, generate_asset_code
             qty_int = int(pi.qty)
             serial_list = []
@@ -3272,6 +3275,7 @@ async def list_material_issues(
                 "expiry_date": b.expiry_date.isoformat() if (b and b.expiry_date) else None,
                 "has_batch": bool(item.item.has_batch) if item.item else False,
                 "has_serial": bool(item.item.has_serial) if item.item else False,
+                "has_unit_code": bool(getattr(item.item, "has_unit_code", False)) if item.item else False,
                 "serial_numbers": item.serial_numbers,
                 "batch_number_text": item.batch_number_text,
                 "bin_code_text": item.bin_code_text,
@@ -3325,6 +3329,7 @@ async def validate_material_issue_items_flow(
             _ItemModel.name,
             _ItemModel.has_batch,
             _ItemModel.has_serial,
+            _ItemModel.has_unit_code,
             _ItemModel.item_type,
         ).where(_ItemModel.id.in_(item_ids))
     )
@@ -3379,8 +3384,9 @@ async def validate_material_issue_items_flow(
                 )
 
         # 3. Serial/Asset Validation
-        item_type = str(m.item_type).lower() if m.item_type else ""
-        is_asset_or_consumable_or_serial = bool(m.has_serial) or (item_type in ("asset", "consumable"))
+        # Unit codes are opt-in per item, so an item typed 'asset' with the
+        # toggle off has no codes to demand here.
+        is_asset_or_consumable_or_serial = bool(m.has_serial) or bool(getattr(m, "has_unit_code", False))
         
         # Clean serial numbers
         cleaned_sns = await clean_serial_numbers(db, it.item_id, it.serial_numbers)
@@ -4280,6 +4286,7 @@ async def get_material_issue(
         response["items"][i]["expiry_date"] = item.batch.expiry_date.strftime("%d-%b-%Y") if (item.batch and item.batch.expiry_date) else None
         response["items"][i]["serial_numbers"] = item.serial_numbers
         response["items"][i]["has_serial"] = bool(item.item.has_serial) if item.item else False
+        response["items"][i]["has_unit_code"] = bool(getattr(item.item, "has_unit_code", False)) if item.item else False
         response["items"][i]["has_batch"] = bool(item.item.has_batch) if item.item else False
         response["items"][i]["batch_number_text"] = item.batch_number_text
         response["items"][i]["bin_code_text"] = item.bin_code_text
@@ -4489,9 +4496,9 @@ async def issue_material(
     # Validate serial numbers for serial-tracked items
     serials_to_issue = []
     for item in mi.items:
-        item_type = str(item.item.item_type).lower() if (item.item and item.item.item_type) else ""
         has_serial = bool(item.item.has_serial) if item.item else False
-        is_asset_or_consumable_or_serial = has_serial or (item_type in ("asset", "consumable"))
+        has_unit_code = bool(getattr(item.item, "has_unit_code", False)) if item.item else False
+        is_asset_or_consumable_or_serial = has_serial or has_unit_code
         
         if is_asset_or_consumable_or_serial:
             cleaned_sns = await clean_serial_numbers(db, item.item_id, item.serial_numbers)

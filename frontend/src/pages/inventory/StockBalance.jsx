@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   Button, Card, Row, Col, Select, Switch, Input, InputNumber, Modal, Table, Descriptions,
   message, Tag, Tooltip, Tabs, Space, Typography, Badge, Form, DatePicker, Popover, List,
-  Radio,
+  Radio, Pagination,
 } from 'antd';
 import {
   AppstoreOutlined, WarningOutlined, ClockCircleOutlined,
@@ -28,6 +28,86 @@ import { DATE_FORMAT } from '../../utils/constants';
 const { Text } = Typography;
 const { Search } = Input;
 
+// The stock-balance list embeds only a preview of each cell's unit codes (an
+// item with 5000 units used to ship all 5000 on page load, 200k strings a
+// page). The true total comes back as *_count; the full list is pulled from
+// /inventory/stock-balance/unit-codes the first time someone opens the popover.
+const UnitCodePopover = ({ record, preview, total, isAsset, onShowBarcode }) => {
+  const [codes, setCodes] = useState(preview || []);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const field = isAsset ? 'asset_code' : 'consumable_code';
+
+  const handleOpen = async (open) => {
+    if (!open || loaded || loading) return;
+    if (total <= (preview || []).length) { setLoaded(true); return; }
+    setLoading(true);
+    try {
+      const res = await api.get('/inventory/stock-balance/unit-codes', {
+        params: {
+          item_id: record.item_id,
+          warehouse_id: record.warehouse_id,
+          page: 1,
+          page_size: 2000,
+        },
+      });
+      const rows = res?.data?.items ?? res?.items ?? [];
+      const list = rows.map((r) => r[field] || r.serial_number).filter(Boolean);
+      if (list.length) setCodes(list);
+      setLoaded(true);
+    } catch {
+      message.error('Could not load the full code list. Showing the first page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const content = (
+    <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 200 }}>
+      <List
+        size="small"
+        loading={loading}
+        dataSource={codes}
+        renderItem={(code) => (
+          <List.Item
+            style={{ padding: '2px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+          >
+            <Tag color={isAsset ? 'cyan' : 'orange'}>{code}</Tag>
+            <Tooltip title="View Barcode / QR Code">
+              <Button
+                type="text"
+                size="small"
+                icon={<BarcodeOutlined style={{ color: '#1890ff' }} />}
+                onClick={() => onShowBarcode(code, record)}
+              />
+            </Tooltip>
+          </List.Item>
+        )}
+      />
+      {!loading && codes.length < total && (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          Showing {codes.length} of {total}
+        </Text>
+      )}
+    </div>
+  );
+
+  return (
+    <Popover
+      content={content}
+      title={isAsset ? 'Asset Codes' : 'Consumable Codes'}
+      trigger="click"
+      placement="bottom"
+      onOpenChange={handleOpen}
+    >
+      <Button type="link" size="small" style={{ padding: 0 }}>
+        View ({total})
+      </Button>
+    </Popover>
+  );
+};
+
 const CATEGORY_OPTIONS = [
   { label: 'Raw Material', value: 'raw_material' },
   { label: 'Finished Good', value: 'finished_good' },
@@ -44,6 +124,128 @@ const GROUP_BY_OPTIONS = [
   { label: 'Category', value: 'category' },
   { label: 'Batch', value: 'batch' },
 ];
+
+const BatchCodesGrid = ({ codes, batch, drillDownItem, whName, onShowBarcode }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [searchText, setSearchText] = useState('');
+
+  const filteredCodes = codes.filter(c => c.toLowerCase().includes(searchText.toLowerCase()));
+  const paginatedCodes = filteredCodes.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const payloadBuilder = (code) => {
+    const matCode = drillDownItem?.item_code || '-';
+    const itemName = drillDownItem?.item_name || '-';
+    const bNum = batch.batch_number || '-';
+    const expLabel = drillDownItem?.item_type === 'asset' ? 'Warranty' : 'Expiry';
+    const expDate = batch.expiry_date ? dayjs(batch.expiry_date).format('YYYY-MM-DD') : '-';
+    return `Material: ${matCode}\nItem: ${itemName}\nBatch: ${bNum}\nCode: ${code}\nWarehouse: ${whName}\n${expLabel}: ${expDate}`;
+  };
+
+  if (codes.length === 0) {
+    return <Text type="secondary" style={{ fontSize: 12 }}>No codes generated for this batch</Text>;
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          QR Labels & Codes ({filteredCodes.length} of {codes.length}):
+        </Text>
+        <Input
+          placeholder="Search codes..."
+          prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+          value={searchText}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={{ width: 220, borderRadius: '6px' }}
+          size="small"
+          allowClear
+        />
+      </div>
+      <Row gutter={[12, 12]}>
+        {paginatedCodes.map((code) => {
+          const codePayload = payloadBuilder(code);
+          return (
+            <Col xs={24} sm={12} md={8} key={code}>
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  padding: '8px', 
+                  borderRadius: 6, 
+                  border: '1px solid #e8e8e8',
+                  backgroundColor: '#fff',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'; e.currentTarget.style.borderColor = '#d9d9d9'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.02)'; e.currentTarget.style.borderColor = '#e8e8e8'; }}
+                onClick={() => onShowBarcode(code, batch)}
+              >
+                <Space direction="vertical" size={2}>
+                  <Tag color={batch.isAsset ? "cyan" : "orange"} style={{ margin: 0 }}>
+                    {code}
+                  </Tag>
+                  <img 
+                    src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(codePayload)}&scale=1`} 
+                    alt="QR" 
+                    style={{ 
+                      height: 48, 
+                      width: 48, 
+                      marginTop: 4,
+                      border: '1px solid #eee', 
+                      padding: 2, 
+                      backgroundColor: '#fff', 
+                      borderRadius: 4 
+                    }} 
+                  />
+                </Space>
+                <Tooltip title="View Barcode / QR Code">
+                  <Button 
+                    type="primary" 
+                    shape="circle" 
+                    icon={<BarcodeOutlined />} 
+                    size="small" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowBarcode(code, batch);
+                    }} 
+                  />
+                </Tooltip>
+              </div>
+            </Col>
+          );
+        })}
+      </Row>
+      {filteredCodes.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+          <Pagination
+            current={currentPage}
+            pageSize={pageSize}
+            total={filteredCodes.length}
+            onChange={(page, size) => {
+              setCurrentPage(page);
+              setPageSize(size);
+            }}
+            size="small"
+            showSizeChanger
+            pageSizeOptions={['12', '24', '48', '96']}
+          />
+        </div>
+      )}
+      {filteredCodes.length === 0 && (
+        <div style={{ padding: '24px 0', textAlign: 'center', backgroundColor: '#fafafa', borderRadius: 8, marginTop: 12 }}>
+          <Text type="secondary">No codes match your search.</Text>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const StockBalance = () => {
   const user = useAuthStore((s) => s.user);
@@ -461,7 +663,9 @@ const StockBalance = () => {
       render: (serials, record) => {
         if (!record.has_serial) return '-';
         const list = serials || [];
-        if (list.length === 0) return <Text type="secondary">None</Text>;
+        // list is only the preview slice; serial_count is the real total.
+        const total = record.serial_count ?? list.length;
+        if (total === 0) return <Text type="secondary">None</Text>;
         const popoverContent = (
           <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 160 }}>
             <List
@@ -483,7 +687,7 @@ const StockBalance = () => {
             placement="bottom"
           >
             <Button type="link" size="small" style={{ padding: 0 }}>
-              View ({list.length})
+              View ({total})
             </Button>
           </Popover>
         );
@@ -497,46 +701,21 @@ const StockBalance = () => {
         if (record.item_type !== 'asset' && record.item_type !== 'consumable') return '-';
         const isAsset = record.item_type === 'asset';
         const list = isAsset ? (record.asset_codes || []) : (record.consumable_codes || []);
-        if (list.length === 0) return <Text type="secondary">None</Text>;
-        const popoverContent = (
-          <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 200 }}>
-            <List
-              size="small"
-              dataSource={list}
-              renderItem={(code) => (
-                <List.Item 
-                  style={{ padding: '2px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                >
-                  <Tag color={isAsset ? "cyan" : "orange"}>{code}</Tag>
-                  <Tooltip title="View Barcode / QR Code">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<BarcodeOutlined style={{ color: '#1890ff' }} />} 
-                      onClick={() => {
-                        setBarcodeDisplayVal(code);
-                        setBarcodeDisplayLabel(record.item_name || '');
-                        setBarcodeDisplaySub(`${record.item_code || ''} | Batch: ${record.batch_number || record.batch_name || '-'}`);
-                        setBarcodeDisplayOpen(true);
-                      }} 
-                    />
-                  </Tooltip>
-                </List.Item>
-              )}
-            />
-          </div>
-        );
+        const total = (isAsset ? record.asset_code_count : record.consumable_code_count) ?? list.length;
+        if (total === 0) return <Text type="secondary">None</Text>;
         return (
-          <Popover
-            content={popoverContent}
-            title={isAsset ? "Asset Codes" : "Consumable Codes"}
-            trigger="click"
-            placement="bottom"
-          >
-            <Button type="link" size="small" style={{ padding: 0 }}>
-              View ({list.length})
-            </Button>
-          </Popover>
+          <UnitCodePopover
+            record={record}
+            preview={list}
+            total={total}
+            isAsset={isAsset}
+            onShowBarcode={(code, rec) => {
+              setBarcodeDisplayVal(code);
+              setBarcodeDisplayLabel(rec.item_name || '');
+              setBarcodeDisplaySub(`${rec.item_code || ''} | Batch: ${rec.batch_number || rec.batch_name || '-'}`);
+              setBarcodeDisplayOpen(true);
+            }}
+          />
         );
       },
     },
@@ -665,7 +844,9 @@ const StockBalance = () => {
       render: (serials, record) => {
         if (!record.has_serial) return '-';
         const list = serials || [];
-        if (list.length === 0) return <Text type="secondary">None</Text>;
+        // list is only the preview slice; serial_count is the real total.
+        const total = record.serial_count ?? list.length;
+        if (total === 0) return <Text type="secondary">None</Text>;
         const popoverContent = (
           <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 160 }}>
             <List
@@ -687,7 +868,7 @@ const StockBalance = () => {
             placement="bottom"
           >
             <Button type="link" size="small" style={{ padding: 0 }}>
-              View ({list.length})
+              View ({total})
             </Button>
           </Popover>
         );
@@ -701,46 +882,21 @@ const StockBalance = () => {
         if (record.item_type !== 'asset' && record.item_type !== 'consumable') return '-';
         const isAsset = record.item_type === 'asset';
         const list = isAsset ? (record.asset_codes || []) : (record.consumable_codes || []);
-        if (list.length === 0) return <Text type="secondary">None</Text>;
-        const popoverContent = (
-          <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 200 }}>
-            <List
-              size="small"
-              dataSource={list}
-              renderItem={(code) => (
-                <List.Item 
-                  style={{ padding: '2px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                >
-                  <Tag color={isAsset ? "cyan" : "orange"}>{code}</Tag>
-                  <Tooltip title="View Barcode / QR Code">
-                    <Button 
-                      type="text" 
-                      size="small" 
-                      icon={<BarcodeOutlined style={{ color: '#1890ff' }} />} 
-                      onClick={() => {
-                        setBarcodeDisplayVal(code);
-                        setBarcodeDisplayLabel(record.item_name || '');
-                        setBarcodeDisplaySub(`${record.item_code || ''} | Batch: ${record.batch_number || record.batch_name || '-'}`);
-                        setBarcodeDisplayOpen(true);
-                      }} 
-                    />
-                  </Tooltip>
-                </List.Item>
-              )}
-            />
-          </div>
-        );
+        const total = (isAsset ? record.asset_code_count : record.consumable_code_count) ?? list.length;
+        if (total === 0) return <Text type="secondary">None</Text>;
         return (
-          <Popover
-            content={popoverContent}
-            title={isAsset ? "Asset Codes" : "Consumable Codes"}
-            trigger="click"
-            placement="bottom"
-          >
-            <Button type="link" size="small" style={{ padding: 0 }}>
-              View ({list.length})
-            </Button>
-          </Popover>
+          <UnitCodePopover
+            record={record}
+            preview={list}
+            total={total}
+            isAsset={isAsset}
+            onShowBarcode={(code, rec) => {
+              setBarcodeDisplayVal(code);
+              setBarcodeDisplayLabel(rec.item_name || '');
+              setBarcodeDisplaySub(`${rec.item_code || ''} | Batch: ${rec.batch_number || rec.batch_name || '-'}`);
+              setBarcodeDisplayOpen(true);
+            }}
+          />
         );
       },
     },
@@ -988,16 +1144,6 @@ const StockBalance = () => {
                           </Text>
                           
                           {bin.batches.map((batch, bIdx) => {
-                            const payloadBuilder = (code) => {
-                              const matCode = drillDownItem?.item_code || '-';
-                              const itemName = drillDownItem?.item_name || '-';
-                              const bNum = batch.batch_number || '-';
-                              const whName = wh.name || '-';
-                              const expLabel = drillDownItem?.item_type === 'asset' ? 'Warranty' : 'Expiry';
-                              const expDate = batch.expiry_date ? dayjs(batch.expiry_date).format('YYYY-MM-DD') : '-';
-                              return `Material: ${matCode}\nItem: ${itemName}\nBatch: ${bNum}\nCode: ${code}\nWarehouse: ${whName}\n${expLabel}: ${expDate}`;
-                            };
-                            
                             return (
                               <Card 
                                 size="small" 
@@ -1020,77 +1166,18 @@ const StockBalance = () => {
                                   </Space>
                                 </div>
                                 
-                                {batch.codes.length > 0 ? (
-                                  <div style={{ marginTop: 12 }}>
-                                    <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                                      QR Labels & Codes ({batch.codes.length}):
-                                    </Text>
-                                    <Row gutter={[12, 12]}>
-                                      {batch.codes.map((code) => {
-                                        const codePayload = payloadBuilder(code);
-                                        return (
-                                          <Col xs={24} sm={12} md={8} key={code}>
-                                            <div 
-                                              style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                padding: '8px', 
-                                                borderRadius: 6, 
-                                                border: '1px solid #e8e8e8',
-                                                backgroundColor: '#fff',
-                                                justifyContent: 'space-between',
-                                                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                                                cursor: 'pointer'
-                                              }}
-                                              onClick={() => {
-                                                setBarcodeDisplayVal(code);
-                                                setBarcodeDisplayLabel(drillDownItem?.item_name || '');
-                                                setBarcodeDisplaySub(`${drillDownItem?.item_code || ''} | Batch: ${batch.batch_number || '-'}`);
-                                                setBarcodeDisplayOpen(true);
-                                              }}
-                                            >
-                                              <Space direction="vertical" size={2}>
-                                                <Tag color={batch.isAsset ? "cyan" : "orange"} style={{ margin: 0 }}>
-                                                  {code}
-                                                </Tag>
-                                                <img 
-                                                  src={`https://bwipjs-api.metafloor.com/?bcid=qrcode&text=${encodeURIComponent(codePayload)}&scale=1`} 
-                                                  alt="QR" 
-                                                  style={{ 
-                                                    height: 48, 
-                                                    width: 48, 
-                                                    marginTop: 4,
-                                                    border: '1px solid #eee', 
-                                                    padding: 2, 
-                                                    backgroundColor: '#fff', 
-                                                    borderRadius: 4 
-                                                  }} 
-                                                />
-                                              </Space>
-                                              <Tooltip title="View Barcode / QR Code">
-                                                <Button 
-                                                  type="primary" 
-                                                  shape="circle" 
-                                                  icon={<BarcodeOutlined />} 
-                                                  size="small" 
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setBarcodeDisplayVal(code);
-                                                    setBarcodeDisplayLabel(drillDownItem?.item_name || '');
-                                                    setBarcodeDisplaySub(`${drillDownItem?.item_code || ''} | Batch: ${batch.batch_number || '-'}`);
-                                                    setBarcodeDisplayOpen(true);
-                                                  }} 
-                                                />
-                                              </Tooltip>
-                                            </div>
-                                          </Col>
-                                        );
-                                      })}
-                                    </Row>
-                                  </div>
-                                ) : (
-                                  <Text type="secondary" style={{ fontSize: 12 }}>No codes generated for this batch</Text>
-                                )}
+                                <BatchCodesGrid
+                                  codes={batch.codes}
+                                  batch={batch}
+                                  drillDownItem={drillDownItem}
+                                  whName={wh.name}
+                                  onShowBarcode={(code, batchData) => {
+                                    setBarcodeDisplayVal(code);
+                                    setBarcodeDisplayLabel(drillDownItem?.item_name || '');
+                                    setBarcodeDisplaySub(`${drillDownItem?.item_code || ''} | Batch: ${batchData.batch_number || '-'}`);
+                                    setBarcodeDisplayOpen(true);
+                                  }}
+                                />
                               </Card>
                             );
                           })}

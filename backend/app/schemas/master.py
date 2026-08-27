@@ -453,6 +453,7 @@ class ItemCreate(BaseModel):
     has_batch: bool = False
     has_serial: bool = False
     has_expiry: bool = False
+    has_unit_code: bool = False
     shelf_life_days: int = 0
     safety_stock: Decimal = Decimal("0")
     reorder_level: Decimal = Decimal("0")
@@ -564,6 +565,7 @@ class ItemUpdate(BaseModel):
     has_batch: Optional[bool] = None
     has_serial: Optional[bool] = None
     has_expiry: Optional[bool] = None
+    has_unit_code: Optional[bool] = None
     shelf_life_days: Optional[int] = None
     safety_stock: Optional[Decimal] = None
     reorder_level: Optional[Decimal] = None
@@ -666,6 +668,7 @@ class ItemResponse(BaseModel):
     has_batch: bool
     has_serial: bool
     has_expiry: bool
+    has_unit_code: Optional[bool] = False
     shelf_life_days: int = 0
     safety_stock: Optional[Decimal] = Decimal("0")
     reorder_level: Optional[Decimal] = Decimal("0")

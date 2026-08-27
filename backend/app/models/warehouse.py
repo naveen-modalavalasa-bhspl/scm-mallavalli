@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Text, Boolean, DateTime, Enum, ForeignKey, Numeric, Integer, UniqueConstraint
+from sqlalchemy import Column, BigInteger, String, Text, Boolean, DateTime, Enum, ForeignKey, Numeric, Integer, UniqueConstraint, Index
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
 from app.database import Base
@@ -164,6 +164,16 @@ class SerialNumber(Base):
 
     item = relationship("Item")
     batch = relationship("Batch")
+
+    __table_args__ = (
+        # Stock-balance enrichment filters on exactly this tuple. Without it
+        # MySQL could only use the item_id prefix of uq_item_serial and then
+        # filtered by hand — a 430k-row scan per request at 87 items x 5000
+        # units. Declared here (not just in the migration) so the alembic
+        # baseline check can see it as genuine pending work.
+        Index("idx_sn_item_wh_status",
+              "item_id", "warehouse_id", "status", "bin_id", "batch_id"),
+    )
 
 
 class MaterialInward(Base):

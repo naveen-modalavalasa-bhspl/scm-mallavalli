@@ -29,6 +29,11 @@ from app.utils.helpers import paginate_params, build_paginated_response, apply_s
 router = APIRouter()
 
 
+# How many unit codes the stock-balance list embeds per row. The full list is
+# served on demand by /inventory/stock-balance/unit-codes.
+_CODE_PREVIEW_LIMIT = 200
+
+
 # ==================== STOCK BALANCE ====================
 
 @router.get("/balance")
@@ -173,6 +178,44 @@ async def get_stock_balances(
             )
         )
 
+    # PERF: the response groups by (item_id, warehouse_id) and used to paginate
+    # that grouped list in Python — which meant loading EVERY stock_balance row
+    # (and every serial number behind them) on every request just to return 20.
+    # At 87 items x 5000 units that was ~36s and a 3.4 MB payload per page.
+    # Resolve the page's group keys in SQL first, then load only those rows.
+    from app.models.master import Item as _ItemPg
+    from app.models.warehouse import Warehouse as _WhPg
+
+    key_filters = query.whereclause
+    keys_q = (
+        select(StockBalance.item_id, StockBalance.warehouse_id)
+        .join(_ItemPg, _ItemPg.id == StockBalance.item_id)
+        .join(_WhPg, _WhPg.id == StockBalance.warehouse_id)
+        .group_by(StockBalance.item_id, StockBalance.warehouse_id)
+        .order_by(func.min(_ItemPg.item_code), func.min(_WhPg.name))
+    )
+    if key_filters is not None:
+        keys_q = keys_q.where(key_filters)
+
+    total_q = select(func.count()).select_from(
+        keys_q.with_only_columns(StockBalance.item_id, StockBalance.warehouse_id)
+        .order_by(None)
+        .subquery()
+    )
+    grouped_total = (await db.execute(total_q)).scalar() or 0
+
+    page_keys = [
+        (r[0], r[1])
+        for r in (await db.execute(keys_q.offset(offset).limit(limit))).all()
+    ]
+    if not page_keys:
+        return build_paginated_response([], grouped_total, page, page_size)
+
+    from sqlalchemy import tuple_ as _tuple
+    query = query.where(
+        _tuple(StockBalance.item_id, StockBalance.warehouse_id).in_(page_keys)
+    )
+
     result = await db.execute(query)
     balances = result.scalars().all()
 
@@ -208,10 +251,11 @@ async def get_stock_balances(
             if is_cen:
                 central_wh_ids.add(w.id)
 
-    # Gather balances with has_serial = True or item_type in (asset, consumable)
+    # Gather balances that carry per-unit identity: serial-tracked, or opted
+    # into unit codes on the Tracking tab.
     serial_tracked_keys = []
     for b in balances:
-        if b.item and (b.item.has_serial or b.item.item_type in ("asset", "consumable")):
+        if b.item and (b.item.has_serial or getattr(b.item, "has_unit_code", False)):
             is_cen = b.warehouse_id in central_wh_ids
             # Non-central warehouses ignore bin and batch constraints
             resolved_bin = b.bin_id if is_cen else None
@@ -221,77 +265,52 @@ async def get_stock_balances(
     serials_map = {}
     asset_codes_map = {}
     consumable_codes_map = {}
+    serial_counts = {}
     if serial_tracked_keys:
         from sqlalchemy import and_, or_
         from app.models.warehouse import SerialNumber
         from sqlalchemy.orm import joinedload
         
-        # Build composite filter
-        conditions = []
-        for (item_id, wh_id, bin_id, batch_id) in serial_tracked_keys:
-            is_cen = wh_id in central_wh_ids
-            cond = and_(
-                SerialNumber.item_id == item_id,
-                SerialNumber.warehouse_id == wh_id,
-                SerialNumber.status == "available"
+        # PERF: this block used to build a per-cell OR-of-ANDs filter and
+        # hydrate EVERY matching SerialNumber as an ORM object (with
+        # joinedload(item)) — 100k+ objects per page at 5000 units an item,
+        # and an OR form MySQL cannot serve from an index (measured 5.9s for
+        # the count alone vs 0.21s for the IN form below).
+        #
+        # Both queries are now driven by a flat IN-list over the page's items,
+        # which uses idx_sn_item_wh_status, and the grouping that the OR
+        # encoded is done by GROUP BY / PARTITION BY instead.
+        page_item_ids = {k[0] for k in serial_tracked_keys}
+        page_wh_ids = {k[1] for k in serial_tracked_keys}
+
+        sn_scope = [
+            SerialNumber.item_id.in_(page_item_ids),
+            SerialNumber.warehouse_id.in_(page_wh_ids),
+            SerialNumber.status == "available",
+        ]
+
+        cnt_rows = await db.execute(
+            select(
+                SerialNumber.item_id, SerialNumber.warehouse_id,
+                SerialNumber.bin_id, SerialNumber.batch_id, func.count(),
             )
-            if is_cen:
-                cond = and_(
-                    cond,
-                    SerialNumber.bin_id == bin_id if bin_id is not None else SerialNumber.bin_id.is_(None),
-                    SerialNumber.batch_id == batch_id if batch_id is not None else SerialNumber.batch_id.is_(None)
-                )
-            conditions.append(cond)
-            
-        s_query = select(SerialNumber).options(joinedload(SerialNumber.item)).where(or_(*conditions))
-        s_result = await db.execute(s_query)
-        serials = s_result.scalars().all()
-        
-        for s in serials:
-            is_cen = s.warehouse_id in central_wh_ids
-            key = (s.item_id, s.warehouse_id, s.bin_id if is_cen else None, s.batch_id if is_cen else None)
-            if key not in serials_map:
-                serials_map[key] = []
-            if key not in asset_codes_map:
-                asset_codes_map[key] = []
-            if key not in consumable_codes_map:
-                consumable_codes_map[key] = []
-                
-            raw_serial = s.serial_number
-            act_asset_code = s.asset_code
-            act_consumable_code = s.consumable_code
-            
-            # Auto-generate dynamic codes if missing from database
-            if not act_asset_code and not act_consumable_code and s.item:
-                item_code = s.item.item_code
-                prefix = "1-"
-                suffix = f"-{item_code}"
-                new_prefix = f"{item_code}-1-"
-                if raw_serial.startswith(prefix) and raw_serial.endswith(suffix):
-                    if s.item.item_type == "asset":
-                        act_asset_code = raw_serial
-                    elif s.item.item_type == "consumable":
-                        act_consumable_code = raw_serial
-                    raw_serial = raw_serial[len(prefix):-len(suffix)]
-                elif raw_serial.startswith(new_prefix):
-                    if s.item.item_type == "asset":
-                        act_asset_code = raw_serial
-                    elif s.item.item_type == "consumable":
-                        act_consumable_code = raw_serial
-                    raw_serial = raw_serial[len(new_prefix):]
-                    
-            if s.item:
-                from app.services.asset_service import generate_asset_code
-                if s.item.item_type == "asset" and not act_asset_code:
-                    act_asset_code = generate_asset_code(raw_serial, s.item.item_code)
-                elif s.item.item_type == "consumable" and not act_consumable_code:
-                    act_consumable_code = generate_asset_code(raw_serial, s.item.item_code)
-            
-            serials_map[key].append(raw_serial)
-            if act_asset_code:
-                asset_codes_map[key].append(act_asset_code)
-            if act_consumable_code:
-                consumable_codes_map[key].append(act_consumable_code)
+            .where(*sn_scope)
+            .group_by(
+                SerialNumber.item_id, SerialNumber.warehouse_id,
+                SerialNumber.bin_id, SerialNumber.batch_id,
+            )
+        )
+        for it_id, wh_id_r, bin_r, batch_r, cnt in cnt_rows.all():
+            is_cen = wh_id_r in central_wh_ids
+            k = (it_id, wh_id_r, bin_r if is_cen else None, batch_r if is_cen else None)
+            serial_counts[k] = serial_counts.get(k, 0) + cnt
+
+        # No code rows are fetched here at all. The list only needs the
+        # counts above to render "View (N)"; the codes themselves are loaded
+        # by /inventory/stock-balance/unit-codes when the user actually opens
+        # a popover. Fetching even a bounded preview cost ~1.1s a page because
+        # the window function still had to scan every unit row for the page's
+        # items — for data that most page views never look at.
 
     response_items = []
     for b in balances:
@@ -305,26 +324,11 @@ async def get_stock_balances(
         acs = list(asset_codes_map.get(key, []))
         ccs = list(consumable_codes_map.get(key, []))
         
-        # Ensure code count matches total quantity for asset, consumable, or serial-tracked items
-        if b.item and (b.item.item_type in ("asset", "consumable") or b.item.has_serial):
-            qty_int = int(b.total_qty or 0)
-            if qty_int > 0:
-                from app.services.asset_service import generate_asset_code
-                target_list = acs if b.item.item_type == "asset" else (ccs if b.item.item_type == "consumable" else sns)
-                if len(target_list) < qty_int:
-                    for i in range(len(target_list) + 1, qty_int + 1):
-                        if i > 1000:
-                            break
-                        v_sn = f"V{i}"
-                        v_code = generate_asset_code(v_sn, b.item.item_code)
-                        if b.item.item_type == "asset":
-                            if v_code not in acs:
-                                acs.append(v_code)
-                        elif b.item.item_type == "consumable":
-                            if v_code not in ccs:
-                                ccs.append(v_code)
-                        if v_sn not in sns:
-                            sns.append(v_sn)
+        # NOTE: this used to pad the code lists with fabricated "V1..V1000"
+        # placeholders so their length matched total_qty. Those codes matched
+        # no serial_numbers row, and the padding was O(qty) per row. The list
+        # now reports serial_count / *_code_count straight from the SQL
+        # aggregate, so the real number is available without inventing rows.
 
         data = {
             "id": b.id,
@@ -486,7 +490,19 @@ async def get_stock_balances(
             if item.get("consumable_codes"):
                 all_consumable_codes.extend(item["consumable_codes"])
         all_consumable_codes = sorted(list(set(all_consumable_codes)))
-        
+
+        # True unit count for this (item, warehouse) group, summed from the SQL
+        # aggregate across every bin/batch cell that rolled up into it.
+        group_unit_count = 0
+        for item in group_list:
+            is_cen_g = item["warehouse_id"] in central_wh_ids
+            gk = (
+                item["item_id"], item["warehouse_id"],
+                item["bin_id"] if is_cen_g else None,
+                item["batch_id"] if is_cen_g else None,
+            )
+            group_unit_count += serial_counts.get(gk, 0)
+
         # Flags
         is_below_reorder = any(item.get("is_below_reorder", False) for item in group_list)
         is_low_stock = any(item.get("is_low_stock", False) for item in group_list)
@@ -509,9 +525,23 @@ async def get_stock_balances(
             "valuation_rate": valuation_rate,
             "stock_value": total_value,
             "last_updated": last_updated,
-            "serial_numbers": all_serials,
-            "asset_codes": all_asset_codes,
-            "consumable_codes": all_consumable_codes,
+            # PERF: the list view renders these behind a click-to-open popover,
+            # so shipping every unit code on page load was pure waste — 200,000
+            # strings / 3.4 MB for a 20-row page at 5000 units an item. Send a
+            # preview plus the true count; the popover pulls the full list from
+            # /inventory/stock-balance/unit-codes when the user actually opens it.
+            "serial_numbers": all_serials[:_CODE_PREVIEW_LIMIT],
+            "asset_codes": all_asset_codes[:_CODE_PREVIEW_LIMIT],
+            "consumable_codes": all_consumable_codes[:_CODE_PREVIEW_LIMIT],
+            # True totals from SQL — all_* only holds the preview slice.
+            "serial_count": group_unit_count or len(all_serials),
+            "asset_code_count": (
+                group_unit_count if first.get("item_type") == "asset" else 0
+            ) or len(all_asset_codes),
+            "consumable_code_count": (
+                group_unit_count if first.get("item_type") == "consumable" else 0
+            ) or len(all_consumable_codes),
+            "codes_truncated": (group_unit_count or 0) > _CODE_PREVIEW_LIMIT,
             "item_name": first.get("item_name"),
             "item_code": first.get("item_code"),
             "item_type": first.get("item_type"),
@@ -536,9 +566,72 @@ async def get_stock_balances(
     # Sort merged list to keep stable pagination
     grouped_items.sort(key=lambda x: (x.get("item_code") or "", x.get("warehouse_name") or ""))
 
-    total = len(grouped_items)
-    paginated_items = grouped_items[offset:offset + page_size]
-    return build_paginated_response(paginated_items, total, page, page_size)
+    # The page was already narrowed to its group keys in SQL, so grouped_items
+    # IS the page — slicing again here would drop rows. total comes from the
+    # SQL count over all matching groups.
+    return build_paginated_response(grouped_items, grouped_total, page, page_size)
+
+
+@router.get("/stock-balance/unit-codes")
+async def get_stock_balance_unit_codes(
+    item_id: int = Query(...),
+    warehouse_id: int = Query(...),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=2000),
+    search: str = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Serial / asset / consumable codes for one (item, warehouse) cell.
+
+    Split out of the stock-balance list so that list can stop embedding every
+    unit code on page load. The UI renders these behind a click-to-open
+    popover, so they're only fetched when someone actually opens one.
+    """
+    from app.models.warehouse import SerialNumber
+    from app.utils.dependencies import get_user_warehouse_scope_ids
+
+    scoped_wh = await get_user_warehouse_scope_ids(db, current_user.id, exclude_virtual=True)
+    if not scoped_wh or warehouse_id not in scoped_wh:
+        raise HTTPException(status_code=403, detail="Not authorized to view stock for this warehouse")
+
+    offset, limit = paginate_params(page, page_size)
+
+    base = select(SerialNumber).where(
+        SerialNumber.item_id == item_id,
+        SerialNumber.warehouse_id == warehouse_id,
+        SerialNumber.status == "available",
+    )
+    if search:
+        term = f"%{search.strip()}%"
+        base = base.where(
+            SerialNumber.serial_number.ilike(term)
+            | SerialNumber.asset_code.ilike(term)
+            | SerialNumber.consumable_code.ilike(term)
+        )
+
+    total = (await db.execute(
+        select(func.count()).select_from(base.subquery())
+    )).scalar() or 0
+
+    rows = (await db.execute(
+        base.order_by(SerialNumber.id).offset(offset).limit(limit)
+    )).scalars().all()
+
+    return build_paginated_response(
+        [
+            {
+                "id": s.id,
+                "serial_number": s.serial_number,
+                "asset_code": s.asset_code,
+                "consumable_code": s.consumable_code,
+                "batch_id": s.batch_id,
+                "bin_id": s.bin_id,
+            }
+            for s in rows
+        ],
+        total, page, page_size,
+    )
 
 
 @router.get("/vehicle-stock-balance")
@@ -638,7 +731,7 @@ async def get_vehicle_stock_balance(
                 act_ac = sn_obj.asset_code if sn_obj else None
                 act_cc = sn_obj.consumable_code if sn_obj else None
 
-                if r.item:
+                if r.item and getattr(r.item, "has_unit_code", False):
                     if r.item.item_type == "asset" and not act_ac:
                         act_ac = generate_asset_code(raw_sn, r.item.item_code)
                     elif r.item.item_type == "consumable" and not act_cc:

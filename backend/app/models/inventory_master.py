@@ -160,6 +160,9 @@ class Item(Base):
     has_batch = Column(Boolean, default=False)
     has_serial = Column(Boolean, default=False)
     has_expiry = Column(Boolean, default=False)
+    # Whether putaway mints a per-unit code. item_type still picks the column
+    # it lands in (asset_code vs consumable_code); this decides if there is one.
+    has_unit_code = Column(Boolean, default=False)
     shelf_life_days = Column(Integer, default=0)
     safety_stock = Column(Numeric(15, 3), default=0)
     reorder_level = Column(Numeric(15, 3), default=0)

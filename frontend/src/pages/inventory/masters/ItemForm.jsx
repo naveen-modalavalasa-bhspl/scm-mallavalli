@@ -87,6 +87,14 @@ const ItemForm = () => {
   const watchedItemCode = Form.useWatch('item_code', form);
   const autoAsset = Form.useWatch('asset_code_auto', form);
   const autoConsumable = Form.useWatch('consumable_code_auto', form);
+  const hasUnitCode = Form.useWatch('has_unit_code', form);
+  // Which serial_numbers column a generated code lands in is still keyed off
+  // item_type; the toggle only decides whether one is generated. These two
+  // spellings are matched exactly by the backend -- 'consumables' (plural) is
+  // accepted elsewhere in this form but does NOT route a unit code.
+  const unitCodeColumnKnown = ['asset', 'consumable'].includes(
+    (selectedItemType || '').toLowerCase()
+  );
 
   useEffect(() => {
     if (autoAsset) {
@@ -168,6 +176,7 @@ const ItemForm = () => {
           has_batch: false,
           has_serial: false,
           has_expiry: false,
+          has_unit_code: false,
           requires_quality_inspection: false,
           barcode_type: 'auto',
           valuation_method: 'fifo',
@@ -1402,6 +1411,24 @@ const ItemForm = () => {
                       </Col>
                     </Row>
                     <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item
+                          name="has_unit_code"
+                          label={(
+                            <Tooltip title="On putaway, mint a code for every unit received: {item code}-1-{serial}. Stored on the serial number, not on the item.">
+                              <span>Generate Unit Code</span>
+                            </Tooltip>
+                          )}
+                          valuePropName="checked"
+                          extra={
+                            hasUnitCode && !unitCodeColumnKnown
+                              ? `Item Type is ${selectedItemType || 'not set'}. Unit codes are stored per item type, so nothing will be generated until this is Asset or Consumable.`
+                              : 'One code per unit received, generated at putaway.'
+                          }
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
                       <Col span={12}>
                         <Form.Item name="shelf_life_days" label="Shelf Life (Days)">
                           <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />

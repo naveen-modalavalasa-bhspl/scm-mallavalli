@@ -72,6 +72,10 @@ class IndentItem(Base):
     item = relationship("Item")
     uom = relationship("UOM")
 
+    @property
+    def has_unit_code(self) -> bool:
+        return bool(getattr(self.item, "has_unit_code", False)) if self.item else False
+
 
 class IndentAcknowledgement(Base):
     __tablename__ = "indent_acknowledgements"

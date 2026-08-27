@@ -152,6 +152,7 @@ class IndentItemResponse(BaseModel):
     purchase_price: Optional[Decimal] = None
     item_type: Optional[str] = None
     has_serial: Optional[bool] = None
+    has_unit_code: Optional[bool] = False
 
     model_config = {"from_attributes": True}
 

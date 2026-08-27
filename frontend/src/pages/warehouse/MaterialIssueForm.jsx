@@ -89,6 +89,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
     amount: 0,
     has_batch: false,
     has_serial: false,
+    has_unit_code: false,
     serial_numbers: [],
     batch_number_text: '',  // non-central WH traceability
     bin_code_text: '',      // non-central WH traceability
@@ -419,6 +420,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
             amount: 0,
             has_batch: !!(it.has_batch ?? it.item?.has_batch),
             has_serial: !!(it.has_serial ?? it.item?.has_serial),
+            has_unit_code: !!(it.has_unit_code ?? it.item?.has_unit_code),
             serial_numbers: [],
           };
         })
@@ -472,6 +474,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
           amount: 0,
           has_batch: !!it.has_batch,
           has_serial: !!it.has_serial,
+          has_unit_code: !!it.has_unit_code,
           serial_numbers: [],
           batch_number_text: '',
           bin_code_text: '',
@@ -597,6 +600,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
         amount: Number(item.amount || 0),
         has_batch: !!item.has_batch,
         has_serial: !!item.has_serial,
+        has_unit_code: !!item.has_unit_code,
         serial_numbers: item.serial_numbers || [],
         batch_number_text: item.batch_number_text || '',
         bin_code_text: item.bin_code_text || '',
@@ -702,7 +706,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
     try {
       const items = recordData?.items || [];
       const invalidItems = items.filter(
-        (i) => (i.has_serial || i.item_type === 'asset' || i.item_type === 'consumable') &&
+        (i) => (i.has_serial || i.has_unit_code) &&
                (!i.serial_numbers || i.serial_numbers.length !== Math.round(Number(i.qty)))
       );
       if (invalidItems.length > 0) {
@@ -952,7 +956,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
       }
 
       const invalidSerials = validItems.filter(
-        (i) => (i.has_serial || i.item_type === 'asset' || i.item_type === 'consumable') && 
+        (i) => (i.has_serial || i.has_unit_code) && 
                (!i.serial_numbers || i.serial_numbers.length !== Math.round(Number(i.qty)))
       );
       if (invalidSerials.length > 0) {
@@ -1025,7 +1029,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
             batch_id: isCentralWarehouse ? (selectedBatches[0] || null) : null,
             bin_id: isCentralWarehouse ? (selectedBins[0] || null) : null,
             rate: item.rate,
-            serial_numbers: (item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable') ? item.serial_numbers : null,
+            serial_numbers: (item.has_serial || item.has_unit_code) ? item.serial_numbers : null,
             batch_number_text: !isCentralWarehouse ? (item.batch_number_text || null) : null,
             bin_code_text: !isCentralWarehouse ? (item.bin_code_text || null) : null,
           });
@@ -1044,7 +1048,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
             batch_id: isCentralWarehouse ? (row.batch_id || null) : null,
             bin_id: isCentralWarehouse ? (row.bin_id || null) : null,
             rate: Number(row.valuation_rate) || item.rate || 0,
-            serial_numbers: (item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable') ? item.serial_numbers : null,
+            serial_numbers: (item.has_serial || item.has_unit_code) ? item.serial_numbers : null,
             batch_number_text: !isCentralWarehouse ? (item.batch_number_text || null) : null,
             bin_code_text: !isCentralWarehouse ? (item.bin_code_text || null) : null,
           });
@@ -1062,7 +1066,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
               batch_id: isCentralWarehouse ? (selectedBatches[0] || null) : null,
               bin_id: isCentralWarehouse ? (selectedBins[0] || null) : null,
               rate: item.rate,
-              serial_numbers: (item.has_serial || item.item_type === 'asset' || item.item_type === 'consumable') ? item.serial_numbers : null,
+              serial_numbers: (item.has_serial || item.has_unit_code) ? item.serial_numbers : null,
               batch_number_text: !isCentralWarehouse ? (item.batch_number_text || null) : null,
               bin_code_text: !isCentralWarehouse ? (item.bin_code_text || null) : null,
             });
@@ -1348,6 +1352,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
                 updateIssueItem(record.key, 'uom_id', item.primary_uom_id || item.uom_id || null);
                 updateIssueItem(record.key, 'has_batch', !!item.has_batch);
                 updateIssueItem(record.key, 'has_serial', !!item.has_serial);
+                updateIssueItem(record.key, 'has_unit_code', !!item.has_unit_code);
 
                 const warehouseId = form.getFieldValue('warehouse_id');
                 if (warehouseId && itemId) {
@@ -1701,7 +1706,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
         const key = `${record.batch_id || 'null'}-${record.bin_id || 'null'}`;
         const availableSerials = serialsMap[key] || [];
         
-        const isAssetOrConsumableOrSerial = record.item_type === 'asset' || record.item_type === 'consumable' || record.has_serial;
+        const isAssetOrConsumableOrSerial = record.has_unit_code || record.has_serial;
         const selectedCount = val?.length || 0;
         const isAsset = record.item_type === 'asset';
         const isConsumable = record.item_type === 'consumable';

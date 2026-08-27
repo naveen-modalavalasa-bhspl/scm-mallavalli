@@ -45,9 +45,9 @@ SENTINEL_TABLES = ("users", "items", "indents")
 
 
 def _missing_from_db(connection, metadata):
-    """Tables/columns the ORM models require that the database lacks."""
+    """Tables/columns/indexes the ORM models require that the database lacks."""
     ctx = MigrationContext.configure(connection)
-    tables, columns = [], []
+    tables, columns, indexes = [], [], []
     for d in compare_metadata(ctx, metadata):
         if not isinstance(d, tuple):
             continue
@@ -55,7 +55,15 @@ def _missing_from_db(connection, metadata):
             tables.append(d[1].name)
         elif d[0] == "add_column":
             columns.append(f"{d[2]}.{d[3].name}")
-    return sorted(tables), sorted(columns)
+        elif d[0] == "add_index":
+            # Index-only migrations used to be invisible here: the check saw
+            # no missing table or column, concluded the schema was ahead, and
+            # stamped straight past them. The revision was then recorded as
+            # applied on a database that never got the index — silently, and
+            # on every deploy target.
+            idx = d[1]
+            indexes.append(f"{idx.table.name}.{idx.name}")
+    return sorted(tables), sorted(columns), sorted(indexes)
 
 
 def reconcile_version(connection, metadata, head) -> bool:
@@ -83,17 +91,22 @@ def reconcile_version(connection, metadata, head) -> bool:
     log.info("pointer at %s, head is %s. Checking whether the schema is "
              "already ahead of it...", current or "<empty>", head)
 
-    missing_tables, missing_columns = _missing_from_db(connection, metadata)
-    if missing_tables or missing_columns:
+    missing_tables, missing_columns, missing_indexes = _missing_from_db(
+        connection, metadata
+    )
+    if missing_tables or missing_columns or missing_indexes:
         for t in missing_tables[:20]:
             log.info("    missing table:  %s", t)
         for c in missing_columns[:20]:
             log.info("    missing column: %s", c)
+        for i in missing_indexes[:20]:
+            log.info("    missing index:  %s", i)
         log.info("genuine pending work - leaving the pointer alone so the "
                  "upgrade can apply it.")
         return False
 
-    log.warning("schema already has every table and column the models require, "
+    log.warning("schema already has every table, column and index the models "
+                "require, "
                 "so the %s chain would replay backwards over it; stamping %s.",
                 "remaining" if current else "whole", head)
     connection.execute(text(
