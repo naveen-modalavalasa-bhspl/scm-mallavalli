@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import {
   Button, Card, Row, Col, Select, Switch, Input, InputNumber, Modal, Table, Descriptions,
   message, Tag, Tooltip, Tabs, Space, Typography, Badge, Form, DatePicker, Popover, List,
-  Radio, Pagination,
+  Radio, Pagination, Spin,
 } from 'antd';
 import {
   AppstoreOutlined, WarningOutlined, ClockCircleOutlined,
@@ -63,11 +63,15 @@ const UnitCodePopover = ({ record, preview, total, isAsset, onShowBarcode }) => 
     }
   };
 
-  const content = (
+  const content = loading ? (
+    <div style={{ minWidth: 200, minHeight: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <Spin size="default" />
+      <Text type="secondary" style={{ fontSize: 12 }}>Loading {isAsset ? 'asset' : 'consumable'} codes...</Text>
+    </div>
+  ) : (
     <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 200 }}>
       <List
         size="small"
-        loading={loading}
         dataSource={codes}
         renderItem={(code) => (
           <List.Item
@@ -85,7 +89,7 @@ const UnitCodePopover = ({ record, preview, total, isAsset, onShowBarcode }) => 
           </List.Item>
         )}
       />
-      {!loading && codes.length < total && (
+      {codes.length < total && (
         <Text type="secondary" style={{ fontSize: 12 }}>
           Showing {codes.length} of {total}
         </Text>

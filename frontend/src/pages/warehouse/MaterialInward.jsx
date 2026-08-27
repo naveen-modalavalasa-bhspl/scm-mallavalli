@@ -6,12 +6,11 @@ import {
 import {
   PlusOutlined, EyeOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import StatusTag from '../../components/StatusTag';
 import api from '../../config/api';
-import { getErrorMessage } from '../../utils/helpers';
+import { getErrorMessage, formatDate } from '../../utils/helpers';
 
 const MaterialInward = () => {
   const navigate = useNavigate();
@@ -104,7 +103,7 @@ const MaterialInward = () => {
       dataIndex: 'received_date',
       key: 'received_date',
       width: 140,
-      render: (v) => v ? dayjs(v).format('DD-MMM-YYYY') : '-',
+      render: (v) => (v ? formatDate(v) : '-'),
     },
     {
       title: 'Vehicle #',

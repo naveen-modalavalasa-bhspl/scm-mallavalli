@@ -91,6 +91,21 @@ export const formatDateForAPI = (date) => {
   return parsed.tz(IST_TZ).format('YYYY-MM-DD');
 };
 
+// Inverse of formatDate, for seeding an antd DatePicker from a backend value.
+// Backend `DateTime` columns come back naive-UTC (no tz suffix), so a plain
+// dayjs(str) reads them as browser-local and a midnight-IST timestamp lands on
+// the previous day. Parse as UTC, shift to IST, then rebuild a local-midnight
+// dayjs so the picker holds the calendar date and nothing else.
+export const parseDateForPicker = (date) => {
+  if (!date) return null;
+  if (typeof date === 'string' && DATE_ONLY_RE.test(date)) {
+    return dayjs(date, 'YYYY-MM-DD');
+  }
+  const d = dayjs.utc(date);
+  if (!d.isValid()) return null;
+  return dayjs(d.tz(IST_TZ).format('YYYY-MM-DD'), 'YYYY-MM-DD');
+};
+
 export const downloadExcel = (data, filename, sheetName = 'Sheet1') => {
   const ws = XLSX.utils.json_to_sheet(data);
   

@@ -8,7 +8,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../../components/PageHeader';
 import api from '../../config/api';
-import { getErrorMessage } from '../../utils/helpers';
+import { getErrorMessage, formatDateForAPI, parseDateForPicker } from '../../utils/helpers';
 
 const MaterialInwardForm = () => {
   const { id } = useParams();
@@ -113,7 +113,7 @@ const MaterialInwardForm = () => {
       const data = res.data;
       form.setFieldsValue({
         ...data,
-        received_date: data.received_date ? dayjs(data.received_date) : null,
+        received_date: parseDateForPicker(data.received_date),
       });
       setItems((data.items || []).map((it, idx) => ({ ...it, key: it.id || idx })));
     } catch (err) {
@@ -227,7 +227,7 @@ const MaterialInwardForm = () => {
         vendor_id: values.vendor_id || null,
         vendor_name_manual: values.vendor_name_manual || null,
         warehouse_id: values.warehouse_id,
-        received_date: values.received_date ? values.received_date.toISOString() : new Date().toISOString(),
+        received_date: formatDateForAPI(values.received_date) || formatDateForAPI(dayjs()),
         vehicle_number: values.vehicle_number || null,
         driver_name: values.driver_name || null,
         remarks: values.remarks || null,
