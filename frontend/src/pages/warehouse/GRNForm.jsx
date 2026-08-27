@@ -1083,6 +1083,7 @@ const GRNForm = () => {
           size="small"
           format={DATE_FORMAT}
           style={{ width: '100%' }}
+          disabledDate={(current) => current && current.isAfter(dayjs().endOf('day'))}
         />
       ),
     },
@@ -1098,6 +1099,7 @@ const GRNForm = () => {
           format={DATE_FORMAT}
           placeholder={record.item_type === 'asset' ? 'Warranty End' : 'Expiry Date'}
           style={{ width: '100%' }}
+          disabledDate={(current) => current && current.isBefore(dayjs().startOf('day'))}
         />
       ),
     },

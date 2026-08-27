@@ -520,19 +520,12 @@ const StockBalance = () => {
           'Item Code': r.item_code,
           'Item Name': r.item_name,
           'Warehouse': r.warehouse_name || r.warehouse,
-          'Location': r.location || '',
-          'Rack': r.rack || '',
-          'Bin': r.bin_code || r.bin || '',
           'Batch': r.batch_number || r.batch || '',
         };
         const dateKey = r.item_type === 'asset' ? 'Warranty End Date' : 'Expiry Date';
         row[dateKey] = r.expiry_date ? formatDate(r.expiry_date) : '';
         row['Available Qty'] = r.available_qty || 0;
-        row['Reserved Qty'] = r.reserved_qty || 0;
-        row['Transit Qty'] = r.transit_qty || 0;
         row['Total Qty'] = r.total_qty || 0;
-        row['Valuation Rate'] = r.valuation_rate || 0;
-        row['Stock Value'] = r.stock_value || 0;
         return row;
       });
       downloadExcel(exportData, 'Stock_Balance');
@@ -608,24 +601,7 @@ const StockBalance = () => {
       sorter: true,
       render: (val) => val || '-',
     },
-    {
-      title: 'Location',
-      dataIndex: 'location',
-      width: 100,
-      render: (val) => val || '-',
-    },
-    {
-      title: 'Rack',
-      dataIndex: 'rack',
-      width: 80,
-      render: (val) => val || '-',
-    },
-    {
-      title: 'Bin',
-      dataIndex: 'bin_code',
-      width: 80,
-      render: (val) => val || '-',
-    },
+
     {
       title: 'Batch',
       dataIndex: 'batch_number',
@@ -657,14 +633,14 @@ const StockBalance = () => {
       },
     },
     {
-      title: 'S.No.',
+      title: 'Serial Nos',
       dataIndex: 'serial_numbers',
       width: 130,
       render: (serials, record) => {
         if (!record.has_serial) return '-';
         const list = serials || [];
         // list is only the preview slice; serial_count is the real total.
-        const total = record.serial_count ?? list.length;
+        const total = record.available_qty || 0;
         if (total === 0) return <Text type="secondary">None</Text>;
         const popoverContent = (
           <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 160 }}>
@@ -701,7 +677,7 @@ const StockBalance = () => {
         if (record.item_type !== 'asset' && record.item_type !== 'consumable') return '-';
         const isAsset = record.item_type === 'asset';
         const list = isAsset ? (record.asset_codes || []) : (record.consumable_codes || []);
-        const total = (isAsset ? record.asset_code_count : record.consumable_code_count) ?? list.length;
+        const total = record.available_qty || 0;
         if (total === 0) return <Text type="secondary">None</Text>;
         return (
           <UnitCodePopover
@@ -728,24 +704,6 @@ const StockBalance = () => {
       render: (val) => formatNumber(val || 0),
     },
     {
-      title: 'Reserved Qty',
-      dataIndex: 'reserved_qty',
-      width: 110,
-      align: 'right',
-      render: (val) => (
-        <Text type={val > 0 ? 'warning' : 'secondary'}>{formatNumber(val || 0)}</Text>
-      ),
-    },
-    {
-      title: 'Transit Qty',
-      dataIndex: 'transit_qty',
-      width: 120,
-      align: 'right',
-      render: (val) => (
-        <Text type={val > 0 ? 'warning' : 'secondary'}>{formatNumber(val || 0)}</Text>
-      ),
-    },
-    {
       title: 'Total Qty',
       dataIndex: 'total_qty',
       width: 100,
@@ -762,23 +720,7 @@ const StockBalance = () => {
         );
       },
     },
-    {
-      title: 'Valuation Rate',
-      dataIndex: 'valuation_rate',
-      width: 120,
-      align: 'right',
-      render: (val) => formatCurrency(val),
-    },
-    {
-      title: 'Stock Value',
-      dataIndex: 'stock_value',
-      width: 130,
-      align: 'right',
-      sorter: true,
-      render: (val) => (
-        <Text strong>{formatCurrency(val)}</Text>
-      ),
-    },
+
     {
       title: '',
       key: 'action',
