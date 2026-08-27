@@ -1310,6 +1310,7 @@ const StockBalance = () => {
             columns={breakdownColumns}
             dataSource={drillDownData}
             rowKey={(r, idx) => r.id || idx}
+            loading={drillDownLoading}
             pagination={false}
             scroll={{ x: 1500 }}
             size="small"
