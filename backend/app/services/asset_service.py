@@ -7,39 +7,27 @@ logger = logging.getLogger(__name__)
 
 async def get_max_system_serial_number(db: AsyncSession) -> int:
     """Find the maximum system-generated serial number in the DB.
-    Uses a PostgreSQL transaction-level advisory lock to guarantee idempotency and prevent duplicate generation under high concurrency.
+    Uses a MySQL advisory lock to guarantee idempotency and prevent duplicate generation under high concurrency.
     """
     from sqlalchemy import text
-    await db.execute(text("SELECT pg_advisory_xact_lock(123456789)"))
-
-    res = await db.execute(select(SerialNumber.serial_number, SerialNumber.asset_code, SerialNumber.consumable_code))
-    sns = []
-    for r_sn, r_ac, r_cc in res.all():
-        for r in [r_sn, r_ac, r_cc]:
-            if not r:
-                continue
-            r = r.strip()
-            # Case 1: Standalone serial number
-            if r.isdigit():
-                sns.append(int(r))
-                continue
-            # Case 2: Old format (1-{serial_number}-{material_code})
-            if r.startswith("1-"):
-                parts = r.split("-")
-                if len(parts) >= 2:
-                    serial_part = parts[1]
-                    if serial_part.isdigit():
-                        sns.append(int(serial_part))
-                        continue
-            # Case 3: New format ({material_code}-1-{serial_number})
-            # Since material_code can contain hyphens, we check if the string ends with "-1-{some_number}"
-            parts = r.split("-")
-            if len(parts) >= 3 and parts[-2] == "1":
-                serial_part = parts[-1]
-                if serial_part.isdigit():
-                    sns.append(int(serial_part))
-
-    return max(sns) if sns else 0
+    await db.execute(text("SELECT GET_LOCK('system_serial_number', 10)"))
+    try:
+        stmt = text("""
+            SELECT MAX(CAST(
+                CASE 
+                    WHEN serial_number REGEXP '^[0-9]+$' THEN serial_number
+                    WHEN serial_number REGEXP '^1-[0-9]+($|-)' THEN SUBSTRING_INDEX(SUBSTRING_INDEX(serial_number, '-', 2), '-', -1)
+                    WHEN serial_number REGEXP '-1-[0-9]+$' THEN SUBSTRING_INDEX(serial_number, '-', -1)
+                    ELSE '0'
+                END 
+            AS UNSIGNED)) AS max_val
+            FROM serial_numbers
+        """)
+        res = await db.execute(stmt)
+        max_val = res.scalar()
+        return max_val if max_val else 0
+    finally:
+        await db.execute(text("SELECT RELEASE_LOCK('system_serial_number')"))
 
 async def get_next_system_serial_number(db: AsyncSession, offset: int = 0) -> str:
     """Get the next system-generated serial number.
