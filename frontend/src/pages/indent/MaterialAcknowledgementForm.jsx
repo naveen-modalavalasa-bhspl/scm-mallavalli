@@ -662,19 +662,7 @@ const MaterialAcknowledgementForm = ({ isViewOnly = false }) => {
                         </Space>
                       );
                     }
-                    return (
-                      <InputNumber
-                        min={0}
-                        max={record.qty}
-                        value={val}
-                        onChange={(v) => {
-                          setAckItems((prev) =>
-                            prev.map((item, i) => (i === idx ? { ...item, received_qty: v } : item))
-                          );
-                        }}
-                        style={{ width: '100%', height: 36 }}
-                      />
-                    );
+                    return <Text type="secondary">-</Text>;
                   },
                 },
                 {
