@@ -1047,6 +1047,14 @@ const StockBalance = () => {
   };
 
   const renderTreeBreakdown = () => {
+    if (drillDownLoading) {
+      return (
+        <div style={{ padding: '48px 0', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <Spin size="large" />
+          <Text type="secondary">Loading stock breakdown...</Text>
+        </div>
+      );
+    }
     const treeData = getDrillDownTreeData();
     if (treeData.length === 0) {
       return (
@@ -1302,7 +1310,6 @@ const StockBalance = () => {
             columns={breakdownColumns}
             dataSource={drillDownData}
             rowKey={(r, idx) => r.id || idx}
-            loading={drillDownLoading}
             pagination={false}
             scroll={{ x: 1500 }}
             size="small"

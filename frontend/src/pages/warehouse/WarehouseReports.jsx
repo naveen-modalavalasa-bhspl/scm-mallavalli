@@ -15,7 +15,7 @@ import {
 } from 'recharts';
 import api from '../../config/api';
 import PageHeader from '../../components/PageHeader';
-import { downloadExcel, formatNumber, formatCurrency } from '../../utils/helpers';
+import { downloadExcel, formatNumber, formatCurrency, formatDate, parseDateForPicker } from '../../utils/helpers';
 import useAuthStore from '../../store/authStore';
 
 const { RangePicker } = DatePicker;
@@ -394,8 +394,9 @@ const WarehouseReports = () => {
           filtered = inwards.filter(inw => {
             const dateVal = inw.received_date || inw.created_at;
             if (!dateVal) return false;
-            const d = new Date(dateVal);
-            return d >= start && d <= end;
+            const d = parseDateForPicker(dateVal);
+            if (!d) return false;
+            return d.toDate() >= start && d.toDate() <= end;
           });
         }
 
@@ -410,8 +411,9 @@ const WarehouseReports = () => {
         filtered.forEach(inw => {
           const dateVal = inw.received_date || inw.created_at;
           if (!dateVal) return;
-          const date = new Date(dateVal);
-          const monthStr = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+          const date = parseDateForPicker(dateVal);
+          if (!date) return;
+          const monthStr = date.format('MMM YYYY');
           if (!monthMap[monthStr]) {
             monthMap[monthStr] = { name: monthStr, count: 0, itemsCount: 0 };
           }
@@ -551,7 +553,7 @@ const WarehouseReports = () => {
         { title: 'PO Number', dataIndex: 'po_number', key: 'po_number' },
         { title: 'Vendor', key: 'vendor', render: (_, r) => r.vendor_name || r.vendor_name_manual || '-' },
         { title: 'Warehouse', dataIndex: 'warehouse_name', key: 'warehouse' },
-        { title: 'Received Date', dataIndex: 'received_date', key: 'received_date', render: (v) => v ? new Date(v).toLocaleDateString() : '-' },
+        { title: 'Received Date', dataIndex: 'received_date', key: 'received_date', render: (v) => (v ? formatDate(v) : '-') },
         { title: 'Vehicle Number', dataIndex: 'vehicle_number', key: 'vehicle_number' },
         { title: 'Items Count', key: 'items_count', align: 'right', render: (_, r) => (r.items || []).length },
         { title: 'Status', dataIndex: 'status', key: 'status', render: (s) => <Tag color={s === 'received' || s === 'grn_created' ? 'green' : s === 'cancelled' ? 'red' : 'blue'}>{(s || '').toUpperCase()}</Tag> }
