@@ -977,6 +977,10 @@ async def get_stock_ledger(
     # could shift when posting_date jumps across page boundaries on a
     # back-dated insert. Always order by posting_date first, then id as the
     # tiebreaker so paging is reproducible.
+    # BUG-INV-124 / FIX: Order by created_at desc so records appear in the
+    # actual wall-clock time they were inserted (transaction done time).
+    # The old case() on qty_out was causing material-issues to always surface
+    # above putaways even when the putaway happened later in real time.
     from sqlalchemy import case
     query = (
         select(StockLedger)
@@ -985,11 +989,7 @@ async def get_stock_ledger(
             selectinload(StockLedger.warehouse),
         )
         .order_by(
-            StockLedger.posting_date.desc(),
-            case(
-                (StockLedger.qty_out > 0, 1),
-                else_=2
-            ).asc(),
+            StockLedger.created_at.desc(),
             StockLedger.id.desc()
         )
     )
