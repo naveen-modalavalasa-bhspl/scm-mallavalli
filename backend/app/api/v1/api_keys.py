@@ -65,6 +65,8 @@ async def create_api_key(
         "masters:user-mapping:read":    "/api/v1/external/masters/users",
         "inventory:stock-balance:read": "/api/v1/external/inventory/stock",
         "inventory:stock-ledger:read":  "/api/v1/external/inventory/stock-ledger",
+        "inventory:vehicle-stock-balance:read": "/api/v1/external/inventory/vehicle-stock-balance",
+        "inventory:vehicle-stock-ledger:read": "/api/v1/external/inventory/vehicle-stock-ledger",
         "indent:acknowledgement:read":  "/api/v1/external/indent/acknowledgements",
     }
 
@@ -94,6 +96,7 @@ async def create_api_key(
         key_hash=key_hash,
         scopes=json.dumps(payload.scopes) if payload.scopes else "[]",
         linked_user_ids=linked_user_ids,
+        linked_vehicle_codes=payload.linked_vehicle_codes,
         endpoint=generated_endpoint,
         expires_at=payload.expires_at,
         is_active=True,
@@ -118,6 +121,7 @@ async def create_api_key(
         name=new_key.name,
         scopes=parsed_scopes,
         linked_user_ids=linked_ids or [],
+        linked_vehicle_codes=new_key.linked_vehicle_codes,
         endpoint=new_key.endpoint,
         expires_at=new_key.expires_at,
         is_active=new_key.is_active,
@@ -152,6 +156,7 @@ async def list_api_keys(
                 name=key.name,
                 scopes=parsed_scopes,
                 linked_user_ids=linked_ids or [],
+                linked_vehicle_codes=key.linked_vehicle_codes,
                 endpoint=key.endpoint,
                 expires_at=key.expires_at,
                 is_active=key.is_active,
@@ -200,6 +205,8 @@ def _compute_endpoint(scopes_list: list, base_url: str) -> str | None:
         "masters:user-mapping:read":    "/api/v1/external/masters/users",
         "inventory:stock-balance:read": "/api/v1/external/inventory/stock",
         "inventory:stock-ledger:read":  "/api/v1/external/inventory/stock-ledger",
+        "inventory:vehicle-stock-balance:read": "/api/v1/external/inventory/vehicle-stock-balance",
+        "inventory:vehicle-stock-ledger:read": "/api/v1/external/inventory/vehicle-stock-ledger",
         "indent:acknowledgement:read":  "/api/v1/external/indent/acknowledgements",
     }
     seen = set()

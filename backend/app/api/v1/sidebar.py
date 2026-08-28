@@ -69,7 +69,7 @@ _ALL_KEYS: Set[str] = {
     # Healthcare
     'healthcare', 'healthcare-dashboard',
     # Settings & Admin
-    'settings', 'settings-users', 'settings-roles', 'settings-system',
+    'settings', 'settings-users', 'settings-roles', 'settings-system', 'settings-api-keys',
     'settings-masters-users', 'settings-masters-user-groups', 'settings-masters-organization-structure',
     'settings-reports-v2', 'settings-reports-system',
     # Logistics

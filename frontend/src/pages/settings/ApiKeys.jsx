@@ -62,6 +62,8 @@ const SCOPE_OPTIONS = [
       { label: 'Stock Transfer (Read)', value: 'inventory:stock-transfer:read' },
       { label: 'Stock Audit (Read)', value: 'inventory:stock-audit:read' },
       { label: 'Replenishment (Read)', value: 'inventory:replenishment:read' },
+      { label: 'Vehicle Stock Balance (Read)', value: 'inventory:vehicle-stock-balance:read' },
+      { label: 'Vehicle Stock Ledger (Read)', value: 'inventory:vehicle-stock-ledger:read' },
     ]
   },
   {
@@ -89,6 +91,10 @@ const ApiKeys = () => {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
+  const [vehicles, setVehicles] = useState([]);
+
+  const selectedScopes = Form.useWatch('scopes', form) || [];
+  const showVehicleFilter = selectedScopes.includes('inventory:vehicle-stock-balance:read') || selectedScopes.includes('inventory:vehicle-stock-ledger:read');
 
   const formatItemTypeName = (name) => {
     if (!name) return '';
@@ -155,9 +161,19 @@ const ApiKeys = () => {
     }
   };
 
+  const fetchVehicles = async () => {
+    try {
+      const res = await api.get('/masters/vehicles', { params: { page_size: 1000 } });
+      setVehicles(res.data?.items || res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch vehicles for api keys:', err);
+    }
+  };
+
   useEffect(() => {
     fetchKeys();
     fetchItemTypes();
+    fetchVehicles();
   }, []);
 
   const fetchTreeData = async () => {
@@ -248,6 +264,7 @@ const ApiKeys = () => {
         scopes: values.scopes || [],
         expires_at: values.expires_at ? values.expires_at.toISOString() : null,
         linked_role_ids: selectedKeys.filter(k => k.startsWith('role-')).map(k => parseInt(k.replace('role-', ''))),
+        linked_vehicle_codes: showVehicleFilter ? (values.linked_vehicle_codes || []) : [],
       };
 
       setSubmitting(true);
@@ -326,8 +343,19 @@ const ApiKeys = () => {
       title: 'Scopes', 
       dataIndex: 'scopes', 
       key: 'scopes', 
-      width: 200,
-      render: (scopes) => scopes?.join(', ') || 'None'
+      width: 250,
+      render: (scopes, record) => (
+        <div>
+          <div>{scopes?.join(', ') || 'None'}</div>
+          {record.linked_vehicle_codes && record.linked_vehicle_codes.length > 0 && (
+            <div style={{ marginTop: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Vehicles: {record.linked_vehicle_codes.join(', ')}
+              </Text>
+            </div>
+          )}
+        </div>
+      )
     },
     {
       title: 'Created',
@@ -474,6 +502,23 @@ const ApiKeys = () => {
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
           
+          {showVehicleFilter && (
+            <>
+              <Divider>Vehicle Data Filtering</Divider>
+              <Paragraph type="secondary">
+                Select vehicles to restrict this API Key's access only to those vehicles. If no vehicles are selected, complete data sharing (all vehicles) is assumed.
+              </Paragraph>
+              <Form.Item name="linked_vehicle_codes">
+                <Select
+                  mode="multiple"
+                  placeholder="Select vehicles"
+                  options={vehicles.map(v => ({ label: `[${v.vehicle_code}] ${v.vehicle_number}`, value: v.vehicle_code }))}
+                  allowClear
+                />
+              </Form.Item>
+            </>
+          )}
+
           <Divider>Data Filtering</Divider>
           <Paragraph type="secondary">
             Select roles to restrict this API Key's access only to the items and materials mapped to those roles. If no roles are selected, no filtering is applied.

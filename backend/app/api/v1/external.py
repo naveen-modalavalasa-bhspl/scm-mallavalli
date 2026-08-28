@@ -429,3 +429,100 @@ async def get_stock_ledger(
         }
         for r in rows
     ]
+@router.get("/inventory/vehicle-stock-balance")
+async def get_vehicle_stock_balance(
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_api_key_scope("inventory:vehicle-stock-balance:read")),
+):
+    """Get vehicle stock balance. Filters by linked_vehicle_codes if present on the API key."""
+    from app.models.stock import VehicleStockBalance
+    from sqlalchemy.orm import selectinload
+    stmt = select(VehicleStockBalance).options(
+        selectinload(VehicleStockBalance.item),
+        selectinload(VehicleStockBalance.batch)
+    )
+    
+    linked_vehicles = getattr(user, "used_api_key", None) and user.used_api_key.linked_vehicle_codes
+    if linked_vehicles:
+        if isinstance(linked_vehicles, str):
+            try:
+                import json as _json
+                linked_vehicles = _json.loads(linked_vehicles)
+            except Exception:
+                linked_vehicles = []
+        if linked_vehicles:
+            stmt = stmt.filter(VehicleStockBalance.vehicle_code.in_(linked_vehicles))
+            
+    result = await db.execute(stmt.limit(limit).offset(offset))
+    balances = result.scalars().all()
+    
+    grouped = {}
+    for b in balances:
+        if b.vehicle_code not in grouped:
+            grouped[b.vehicle_code] = {
+                "vehicle_code": b.vehicle_code,
+                "vehicle_number": b.vehicle_number,
+                "items": []
+            }
+        grouped[b.vehicle_code]["items"].append({
+            "id": b.id,
+            "item_name": b.item.name if b.item else None,
+            "batch_name": b.batch.batch_number if b.batch else None,
+            "qty": float(b.qty or 0),
+            "serial_numbers": b.serial_numbers,
+            "last_updated": b.last_updated.isoformat() if b.last_updated else None,
+        })
+        
+    return list(grouped.values())
+
+
+@router.get("/inventory/vehicle-stock-ledger")
+async def get_vehicle_stock_ledger(
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_api_key_scope("inventory:vehicle-stock-ledger:read")),
+):
+    """Get vehicle stock ledger. Filters by linked_vehicle_codes if present on the API key."""
+    from app.models.stock import VehicleStockLedger
+    from sqlalchemy.orm import selectinload
+    stmt = select(VehicleStockLedger).options(
+        selectinload(VehicleStockLedger.item),
+        selectinload(VehicleStockLedger.batch)
+    ).order_by(VehicleStockLedger.id.desc())
+    
+    linked_vehicles = getattr(user, "used_api_key", None) and user.used_api_key.linked_vehicle_codes
+    if linked_vehicles:
+        if isinstance(linked_vehicles, str):
+            try:
+                import json as _json
+                linked_vehicles = _json.loads(linked_vehicles)
+            except Exception:
+                linked_vehicles = []
+        if linked_vehicles:
+            stmt = stmt.filter(VehicleStockLedger.vehicle_code.in_(linked_vehicles))
+            
+    result = await db.execute(stmt.limit(limit).offset(offset))
+    ledger = result.scalars().all()
+    
+    grouped = {}
+    for l in ledger:
+        if l.vehicle_code not in grouped:
+            grouped[l.vehicle_code] = {
+                "vehicle_code": l.vehicle_code,
+                "vehicle_number": l.vehicle_number,
+                "transactions": []
+            }
+        grouped[l.vehicle_code]["transactions"].append({
+            "id": l.id,
+            "item_name": l.item.name if l.item else None,
+            "batch_name": l.batch.batch_number if l.batch else None,
+            "transaction_type": l.transaction_type,
+            "qty_in": float(l.qty_in or 0),
+            "qty_out": float(l.qty_out or 0),
+            "posting_date": l.posting_date.isoformat() if l.posting_date else None,
+        })
+        
+    return list(grouped.values())

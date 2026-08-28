@@ -212,6 +212,7 @@ class ApiKey(Base):
     key_hash = Column(String(128), unique=True, nullable=False)
     scopes = Column(Text, nullable=True)  # JSON string array of scopes
     linked_user_ids = Column(JSON, nullable=True)  # JSON array of user IDs
+    linked_vehicle_codes = Column(JSON, nullable=True)  # JSON array of vehicle codes
     endpoint = Column(String(500), nullable=True)
     expires_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)

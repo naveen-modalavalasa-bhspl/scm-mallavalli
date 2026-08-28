@@ -7,6 +7,7 @@ class ApiKeyBase(BaseModel):
     scopes: Optional[List[str]] = []
     linked_user_ids: Optional[List[int]] = []
     linked_role_ids: Optional[List[int]] = []
+    linked_vehicle_codes: Optional[List[str]] = None
     endpoint: Optional[str] = None
     expires_at: Optional[datetime] = None
 
@@ -18,6 +19,7 @@ class ApiKeyResponse(ApiKeyBase):
     name: str
     scopes: Optional[List[str]]
     linked_user_ids: Optional[List[int]]
+    linked_vehicle_codes: Optional[List[str]]
     expires_at: Optional[datetime]
     is_active: bool
     last_used_at: Optional[datetime]
