@@ -1070,6 +1070,7 @@ async def get_stock_ledger(
     do_ids = {e.reference_id for e in entries if e.reference_type == "dispatch_order" and e.reference_id}
     ack_ids = {e.reference_id for e in entries if e.reference_type == "dispatch_acknowledgement" and e.reference_id}
     po_ids = {e.reference_id for e in entries if e.reference_type == "putaway_order" and e.reference_id}
+    vi_ids = {e.reference_id for e in entries if e.reference_type == "vehicle_issue" and e.reference_id}
 
     users_map = {}
     if user_ids:
@@ -1128,6 +1129,16 @@ async def get_stock_ledger(
         for r in p_rows.mappings().all():
             po_map[r["id"]] = r["putaway_number"]
 
+    vi_map = {}
+    if vi_ids:
+        from app.models.issue import VehicleIssue
+        v_rows = await db.execute(
+            select(VehicleIssue.id, VehicleIssue.issue_number)
+            .where(VehicleIssue.id.in_(list(vi_ids)))
+        )
+        for r in v_rows.mappings().all():
+            vi_map[r["id"]] = r["issue_number"]
+
     response_items = []
     for e in entries:
         data = StockLedgerResponse.model_validate(e).model_dump()
@@ -1146,6 +1157,8 @@ async def get_stock_ledger(
             data["reference"] = mi_map.get(mi_id) if mi_id else str(e.reference_id)
         elif e.reference_type == "putaway_order":
             data["reference"] = po_map.get(e.reference_id)
+        elif e.reference_type == "vehicle_issue":
+            data["reference"] = vi_map.get(e.reference_id)
         else:
             data["reference"] = str(e.reference_id) if e.reference_id else None
             

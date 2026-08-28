@@ -7,9 +7,10 @@ import {
 import {
   ArrowLeftOutlined, PlusOutlined, EditOutlined, DeleteOutlined,
   CheckOutlined, MinusCircleOutlined, SaveOutlined,
-  SendOutlined, BarcodeOutlined, QrcodeOutlined, EyeOutlined
+  SendOutlined, BarcodeOutlined, QrcodeOutlined, EyeOutlined, DownloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx-js-style';
 import PageHeader from '../../components/PageHeader';
 import StatusTag from '../../components/StatusTag';
 import ItemSelector from '../../components/ItemSelector';
@@ -48,6 +49,7 @@ const VehicleMaterialIssueForm = () => {
   const [uomOptions, setUomOptions] = useState([]);
   const [userOptions, setUserOptions] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
 
@@ -124,11 +126,12 @@ const VehicleMaterialIssueForm = () => {
   // --- Lookups ---
   const loadLookups = useCallback(async () => {
     try {
-      const [whRes, uomRes, userRes, projRes] = await Promise.allSettled([
+      const [whRes, uomRes, userRes, projRes, deptRes] = await Promise.allSettled([
         api.get('/masters/warehouses', { params: { page_size: 200, exclude_virtual: true } }),
         api.get('/masters/uom', { params: { page_size: 200 } }),
         api.get('/users/lookup', { params: { page_size: 200 } }),
         api.get('/masters/projects', { params: { page_size: 200 } }),
+        api.get('/masters/departments', { params: { page_size: 200 } }),
       ]);
       if (whRes.status === 'fulfilled') {
         const w = whRes.value.data;
@@ -163,6 +166,15 @@ const VehicleMaterialIssueForm = () => {
           (p.items || p.data || p || []).map((i) => ({
             label: i.name || i.project_name,
             value: i.id,
+          }))
+        );
+      }
+      if (deptRes.status === 'fulfilled') {
+        const d = deptRes.value.data;
+        setDepartments(
+          (d.items || d.data || d || []).map((i) => ({
+            label: i.name || i.department_name,
+            value: String(i.id),
           }))
         );
       }
@@ -388,7 +400,7 @@ const VehicleMaterialIssueForm = () => {
       const empDept = user?.department_name || user?.department || user?.employee?.department || user?.employee?.department_name || '';
       form.setFieldsValue({
         warehouse_id: sourceWarehouseId,
-        department: ind.department || empDept || form.getFieldValue('department'),
+        department: (ind.department || empDept || form.getFieldValue('department'))?.toString(),
         raised_by_emp_code: ind.raised_by_emp_code || ind.employee_code || ind.emp_code || '',
         raised_by_name: ind.raised_by_name || ind.created_by_name || '',
         position_name: ind.position_name || ind.raising_position || ind.position || '',
@@ -458,7 +470,7 @@ const VehicleMaterialIssueForm = () => {
       form.setFieldsValue({
         warehouse_id: data.warehouse_id,
         indent_id: data.indent_id,
-        department: data.department,
+        department: data.department?.toString(),
         issued_to: data.issued_to,
         issue_date: data.issue_date ? dayjs(data.issue_date) : null,
         remarks: data.remarks,
@@ -589,7 +601,7 @@ const VehicleMaterialIssueForm = () => {
       const empDept = user?.department_name || user?.department || user?.employee?.department || user?.employee?.department_name || '';
       form.setFieldsValue({
         issue_date: dayjs(),
-        department: empDept,
+        department: empDept?.toString(),
       });
       setIssueItems([createEmptyItem()]);
     }
@@ -1563,7 +1575,7 @@ const VehicleMaterialIssueForm = () => {
               <Descriptions.Item label="Status"><StatusTag status={recordData.status} /></Descriptions.Item>
               <Descriptions.Item label="Source Warehouse">{recordData.warehouse_name || '-'}</Descriptions.Item>
               <Descriptions.Item label="Project">{recordData.project_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Department">{recordData.department || '-'}</Descriptions.Item>
+              {/* <Descriptions.Item label="Department">{recordData.department || '-'}</Descriptions.Item> */}
               <Descriptions.Item label="Issue Date">{formatDate(recordData.issue_date)}</Descriptions.Item>
               <Descriptions.Item label="Vehicle Code">{recordData.vehicle_code || '-'}</Descriptions.Item>
               <Descriptions.Item label="Vehicle Number">{recordData.vehicle_number || '-'}</Descriptions.Item>
@@ -1622,18 +1634,61 @@ const VehicleMaterialIssueForm = () => {
     );
   }
 
+  const downloadTemplate = () => {
+    const wsData = [
+      ['Warehouse', 'Indent ID', 'Department', 'Issued To', 'Issue Date', 'Vehicle Code', 'Vehicle Number', 'Project ID', 'Remarks', 'Item ID / Code', 'Qty', 'UOM', 'Batch No', 'Bin Code', 'Rate', 'Serial Numbers'],
+      ['Main Warehouse', 'IND-001', 'Logistics', 'Jane Doe', '01-Jan-2024', 'VEH-01', 'MH-12-1234', 'PROJ-01', 'Issue remarks here', 'ITEM-001', '10', 'Nos', 'BATCH-A', 'BIN-1', '100.00', 'SN-001,SN-002']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Style headers
+    const mandatoryCols = ['Warehouse', 'Issue Date', 'Vehicle Code', 'Vehicle Number', 'Item ID / Code', 'Qty', 'UOM'];
+    for (let c = 0; c < wsData[0].length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ c: c, r: 0 });
+      if (!ws[cellRef]) continue;
+      const isMandatory = mandatoryCols.includes(wsData[0][c]);
+      ws[cellRef].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: isMandatory ? "EF4444" : "3B82F6" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    const colWidths = wsData[0].map(col => ({ wch: Math.max(15, col.length + 2) }));
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Vehicle Issue");
+    XLSX.writeFile(wb, "Vehicle_Issue_Template.xlsx");
+  };
+
   return (
     <div style={{ padding: '24px' }}>
       <PageHeader
         title={isNew ? 'New Vehicle Material Issue' : `Edit Vehicle Material Issue: ${recordData?.issue_number || ''}`}
         subtitle={isNew ? 'Create a new outward issue of stock directly to a vehicle' : `Status: ${recordData?.status || ''}`}
         onBack={() => navigate(backPath)}
-      />
+      >
+        <Space>
+          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>Download Template</Button>
+        </Space>
+      </PageHeader>
 
       {loading ? (
         <Card style={{ textAlign: 'center', padding: '50px' }}><Spin size="large" /></Card>
       ) : (
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" className="view-mode-form">
+          <style>{`
+            .view-mode-form .ant-input-disabled,
+            .view-mode-form .ant-select-disabled .ant-select-selector,
+            .view-mode-form .ant-picker-disabled {
+              color: #000 !important;
+              background-color: #fafafa !important;
+              border-color: #d9d9d9 !important;
+              opacity: 1 !important;
+              font-weight: 600 !important;
+            }
+          `}</style>
           <Card title="Vehicle Issue Information" style={{ marginBottom: '24px' }}>
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8}>
@@ -1717,24 +1772,24 @@ const VehicleMaterialIssueForm = () => {
                   <Input placeholder="Vehicle Number" disabled={true} />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} md={8}>
+              {/* <Col xs={24} sm={12} md={8}>
                 <Form.Item label="Department" name="department">
-                  <Input disabled={true} placeholder="Department" />
+                  <Select disabled={true} placeholder="Department" options={departments} />
                 </Form.Item>
-              </Col>
+              </Col> */}
               <Col xs={24} sm={12} md={8}>
                 <Form.Item label="Emp Code" name="raised_by_emp_code">
-                  <Input disabled style={{ color: 'rgba(0, 0, 0, 0.85)', backgroundColor: '#fafafa' }} placeholder="-" />
+                  <Input disabled placeholder="-" />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <Form.Item label="Emp Name" name="raised_by_name">
-                  <Input disabled style={{ color: 'rgba(0, 0, 0, 0.85)', backgroundColor: '#fafafa' }} placeholder="-" />
+                  <Input disabled placeholder="-" />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8}>
                 <Form.Item label="Position" name="position_name">
-                  <Input disabled style={{ color: 'rgba(0, 0, 0, 0.85)', backgroundColor: '#fafafa' }} placeholder="-" />
+                  <Input disabled placeholder="-" />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8}>

@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.warehouse import MaterialInward, MaterialInwardItem, Warehouse
 from app.models.procurement import PurchaseOrder, PurchaseOrderItem
 from app.models.master import Vendor, Item, UOM
-from app.schemas.warehouse import MaterialInwardCreate, MaterialInwardResponse
+from app.schemas.warehouse import MaterialInwardCreate, MaterialInwardResponse, MaterialInwardUpdate
 from app.services.number_series import generate_number
 from app.utils.dependencies import get_current_user, require_key
 from app.utils.helpers import paginate_params, build_paginated_response, apply_search_filter
@@ -280,6 +280,89 @@ async def create_material_inward(
         logger.warning("Failed to create notification for create_material_inward: %s", notif_err)
     
     return build_inward_response(inward)
+
+
+@router.put("/{id}", response_model=MaterialInwardResponse)
+async def update_material_inward(
+    id: int,
+    payload: MaterialInwardUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_key("warehouse-material-inward")),
+):
+    result = await db.execute(
+        select(MaterialInward)
+        .options(selectinload(MaterialInward.items))
+        .where(MaterialInward.id == id)
+    )
+    inward = result.scalar_one_or_none()
+    
+    if not inward:
+        raise HTTPException(status_code=404, detail="Material Inward not found")
+        
+    if inward.status != "draft":
+        raise HTTPException(status_code=400, detail=f"Cannot edit inward in '{inward.status}' status")
+
+    if payload.po_id and payload.po_id != inward.po_id:
+        po_res = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == payload.po_id))
+        po = po_res.scalar_one_or_none()
+        if not po:
+            raise HTTPException(status_code=404, detail="Purchase Order not found")
+        if po.supplier_acknowledgement != "accepted":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot receive items: PO {po.po_number} has not been accepted by the supplier.",
+            )
+            
+    # Update header
+    inward.po_id = payload.po_id
+    inward.po_number = payload.po_number
+    inward.vendor_id = payload.vendor_id
+    inward.vendor_name_manual = payload.vendor_name_manual
+    inward.warehouse_id = payload.warehouse_id
+    inward.received_date = payload.received_date
+    inward.vehicle_number = payload.vehicle_number
+    inward.driver_name = payload.driver_name
+    inward.remarks = payload.remarks
+    inward.updated_at = datetime.now(timezone.utc)
+    
+    # Replace items safely
+    old_items = list(inward.items)
+    inward.items.clear()
+    for old_item in old_items:
+        await db.delete(old_item)
+        
+    await db.flush()
+    
+    for item in payload.items:
+        inward_item = MaterialInwardItem(
+            inward_id=inward.id,
+            item_id=item.item_id,
+            item_name_manual=item.item_name_manual,
+            ordered_qty=item.ordered_qty,
+            received_qty=item.received_qty,
+            uom_id=item.uom_id,
+            uom_manual=item.uom_manual,
+            remarks=item.remarks,
+        )
+        db.add(inward_item)
+        
+    await db.flush()
+    
+    inward_id = inward.id
+    await db.commit()
+    
+    result = await db.execute(
+        select(MaterialInward)
+        .options(
+            selectinload(MaterialInward.items).selectinload(MaterialInwardItem.item),
+            selectinload(MaterialInward.items).selectinload(MaterialInwardItem.uom),
+            selectinload(MaterialInward.vendor),
+            selectinload(MaterialInward.warehouse),
+        )
+        .where(MaterialInward.id == inward_id)
+    )
+    inward_reloaded = result.scalar_one_or_none()
+    return build_inward_response(inward_reloaded)
 
 
 @router.get("/{id}", response_model=MaterialInwardResponse)

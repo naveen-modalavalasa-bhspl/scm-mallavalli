@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import dayjs from 'dayjs';
 import {
   Button, Select, Space, Popconfirm, message, Tag, Typography, Tooltip, DatePicker
 } from 'antd';
@@ -171,7 +172,7 @@ const GRN = () => {
       key: 'grn_date',
       width: 150,
       sorter: true,
-      render: (v) => v ? formatDate(v) : '-',
+      render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
     },
     {
       title: 'Supplier Invoice',
@@ -236,9 +237,9 @@ const GRN = () => {
               <Tooltip title="Edit">
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/warehouse/grn/${record.id}?edit=true`)} />
               </Tooltip>
-              <Tooltip title="Submit for QI">
+              <Tooltip title="Save and Submit">
                 <Popconfirm title="Submit this GRN for Quality Inspection?" onConfirm={() => handleSubmitForQI(record.id)}>
-                  <Button type="link" size="small" icon={<ExperimentOutlined />} style={{ color: '#722ed1' }} />
+                  <Button type="link" size="small" icon={<ExperimentOutlined />} style={{ color: '#eb2f96' }} />
                 </Popconfirm>
               </Tooltip>
               <Popconfirm title="Delete this GRN?" onConfirm={() => handleDelete(record.id)} okButtonProps={{ danger: true }}>

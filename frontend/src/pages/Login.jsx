@@ -312,9 +312,6 @@ const Login = () => {
                 />
                 Keep me signed in on this device
               </label>
-              <a href="#" onClick={(e) => { e.preventDefault(); handleForgot(); }} className="forgot">
-                Forgot password?
-              </a>
             </div>
 
             <button type="submit" className="btn-primary" disabled={loading || carrierLoading || vendorLoading}>
@@ -324,23 +321,7 @@ const Login = () => {
 
 
 
-            <div className="help-card">
-              <div className="ic">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                  <path d="M12 17h.01" />
-                </svg>
-              </div>
-              <div className="body">
-                <b>First time signing in?</b>
-                Use the invite link sent to your BHSPL email, or reach out to the stores admin
-                for your district.
-                <br />
-                <a href="mailto:it@bhspl.in">Contact IT →</a>
-              </div>
-            </div>
+
 
           </form>
         </div>

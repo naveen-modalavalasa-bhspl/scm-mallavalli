@@ -8,8 +8,10 @@ import {
   PlusOutlined, ArrowLeftOutlined,
   SendOutlined, MinusCircleOutlined, CheckOutlined,
   CloseCircleOutlined, EditOutlined, ExperimentOutlined, PrinterOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx-js-style';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import PageHeader from '../../components/PageHeader';
@@ -19,7 +21,7 @@ import ItemSelector from '../../components/ItemSelector';
 import api from '../../config/api';
 import {
   formatDate, formatCurrency, formatNumber, getErrorMessage,
-  formatDateForAPI, formatDateTime,
+  formatDateForAPI, formatDateTime, formatDateTimeCustom,
 } from '../../utils/helpers';
 import { DATE_FORMAT } from '../../utils/constants';
 
@@ -532,17 +534,9 @@ const GRNForm = () => {
         form.setFields([{ name: 'po_id', value: null, errors: [] }]);
       }
       const values = await form.validateFields();
-      // Ensure required header fields are present (backend requires vendor_id, warehouse_id, grn_date)
-      if (!values.vendor_id) {
-        message.error('Vendor is required');
-        return;
-      }
+      // Ensure required header fields are present
       if (!values.warehouse_id) {
         message.error('Warehouse is required');
-        return;
-      }
-      if (!values.grn_date) {
-        message.error('GRN date is required');
         return;
       }
       // BUG-INV-131: improve the error so the user can tell *why* nothing
@@ -618,7 +612,7 @@ const GRNForm = () => {
         po_number: selectedPO?.po_number || selectedInward?.po_number || grn?.po_number || values.po_number || null,
         vendor_id: values.vendor_id,
         warehouse_id: values.warehouse_id,
-        grn_date: formatDateForAPI(values.grn_date),
+        grn_date: formatDateForAPI(values.grn_date || dayjs()),
         supplier_invoice: values.supplier_invoice || null,
         supplier_invoice_date: formatDateForAPI(values.supplier_invoice_date) || null,
         vehicle_number: values.vehicle_number || null,
@@ -715,6 +709,33 @@ const GRNForm = () => {
     );
   }
 
+  const downloadTemplate = () => {
+    const wsData = [
+      ['Receipt Type', 'Vendor ID / Code', 'Vendor Name (Manual)', 'Warehouse', 'PO Number', 'Inward Reference', 'Supplier Invoice', 'Supplier Invoice Date', 'Vehicle Number', 'Remarks', 'Item ID / Code', 'Item Name (Manual)', 'Batch No', 'Manufacture Date', 'Expiry / Warranty Date', 'Received Qty', 'Accepted Qty', 'Rejected Qty', 'UOM', 'Rate', 'Discount %', 'Tax Amount'],
+      ['direct', 'V001', '', 'Main Warehouse', 'PO-001', 'INW-001', 'INV-1234', '01-Jan-2024', 'MH-12-1234', 'GRN remarks', 'ITEM-001', '', 'BATCH-001', '01-Jan-2024', '31-Dec-2025', '100', '95', '5', 'Nos', '100.00', '0', '5.00']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Style headers
+    const mandatoryCols = ['Receipt Type', 'Vendor ID / Code', 'Warehouse', 'Item ID / Code', 'Accepted Qty', 'UOM', 'Rate'];
+    for (let c = 0; c < wsData[0].length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ c: c, r: 0 });
+      if (!ws[cellRef]) continue;
+      const isMandatory = mandatoryCols.includes(wsData[0][c]);
+      ws[cellRef].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: isMandatory ? "EF4444" : "3B82F6" } }, // Red for mandatory, Blue for optional
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    const colWidths = wsData[0].map(col => ({ wch: Math.max(15, col.length + 2) }));
+    ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "GRN");
+    XLSX.writeFile(wb, "GRN_Template.xlsx");
+  };
+
   // ============================
   // VIEW MODE (existing GRN)
   // ============================
@@ -734,7 +755,7 @@ const GRNForm = () => {
                   Edit
                 </Button>
                 <Popconfirm title="Submit this GRN for Quality Inspection?" onConfirm={handleSubmitForQI}>
-                  <Button type="primary" icon={<ExperimentOutlined />}>Submit for QI</Button>
+                  <Button type="primary" icon={<ExperimentOutlined />}>Save and Submit</Button>
                 </Popconfirm>
                 <Popconfirm title="Delete this GRN?" onConfirm={handleDelete} okButtonProps={{ danger: true }}>
                   <Button danger icon={<CloseCircleOutlined />}>Delete</Button>
@@ -746,6 +767,7 @@ const GRNForm = () => {
                 <Button type="primary" icon={<CheckOutlined />}>Complete</Button>
               </Popconfirm>
             )}
+            <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>Download Template</Button>
             <Button icon={<PrinterOutlined />} onClick={handlePrint}>Print</Button>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/warehouse/grn')}>Back</Button>
           </Space>
@@ -784,10 +806,6 @@ const GRNForm = () => {
               <Text strong style={{ fontSize: 14 }}>{grn.grn_number || '-'}</Text>
             </Col>
             <Col xs={12} sm={8} md={6}>
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>GRN Date</Text>
-              <Text style={{ fontSize: 14 }}>{formatDate(grn.grn_date) || '-'}</Text>
-            </Col>
-            <Col xs={12} sm={8} md={6}>
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>Status</Text>
               <div style={{ marginTop: 2 }}><StatusTag status={grn.status} /></div>
             </Col>
@@ -807,7 +825,7 @@ const GRNForm = () => {
               <Text style={{ fontSize: 14 }}>{grn.warehouse_name || '-'}</Text>
             </Col>
             <Col xs={12} sm={8} md={6}>
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>PO Reference</Text>
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>PO / Document of Delivery</Text>
               <Text style={{ fontSize: 14, color: grn.po_number ? undefined : '#8c8c8c', fontStyle: grn.po_number ? 'normal' : 'italic' }}>
                 {grn.po_number || 'N/A'}
               </Text>
@@ -938,6 +956,10 @@ const GRNForm = () => {
             )}
           />
         </Card>
+
+        <div style={{ textAlign: 'center', marginTop: 16, marginBottom: 24, fontWeight: 'bold', color: '#595959' }}>
+          {grn.created_at ? formatDateTimeCustom(grn.created_at, 'ssmmHHYYMMDD') : '-'}
+        </div>
       </div>
     );
   }
@@ -968,6 +990,14 @@ const GRNForm = () => {
                 });
                 return;
               }
+
+              const exists = grnItems.some((i) => i.key !== record.key && String(i.item_id) === String(itemId));
+              if (exists) {
+                const itemName = item?.item_name || item?.name || 'Item';
+                message.warning(`${itemName} already added. Just increase that qty.`);
+                return;
+              }
+
               // Start with what ItemSelector gave us
               let itemType = item?.item_type || null;
               // If item_type is missing (shouldn't happen, but defensive), fetch it
@@ -994,8 +1024,16 @@ const GRNForm = () => {
         ),
     },
     {
-      title: 'Ordered', dataIndex: 'ordered_qty', width: 75, align: 'center',
-      render: (val) => <Text type="secondary">{formatNumber(val || 0)}</Text>,
+      title: 'Ordered', dataIndex: 'ordered_qty', width: 95, align: 'center',
+      render: (val, record) => (
+        <InputNumber
+          min={0}
+          value={val}
+          onChange={(v) => updateItemRow(record.key, 'ordered_qty', v || 0)}
+          style={{ width: '100%' }}
+          size="small"
+        />
+      ),
     },
     {
       title: 'Received Qty', dataIndex: 'received_qty', width: 95,
@@ -1064,7 +1102,7 @@ const GRNForm = () => {
     {
       title: <span>Batch No <span style={{ color: '#ff4d4f' }}>*</span></span>,
       dataIndex: 'batch_number',
-      width: 100,
+      width: 200,
       render: (val, record) => (
         <Input
           value={val}
@@ -1075,7 +1113,7 @@ const GRNForm = () => {
       ),
     },
     {
-      title: 'Mfg Date', dataIndex: 'manufacturing_date', width: 120,
+      title: 'Mfg Date', dataIndex: 'manufacturing_date', width: 160,
       render: (val, record) => (
         <DatePicker
           value={val ? dayjs(val) : null}
@@ -1090,7 +1128,7 @@ const GRNForm = () => {
     {
       title: 'Expiry / Warranty End Date',
       dataIndex: 'expiry_date',
-      width: 120,
+      width: 180,
       render: (val, record) => (
         <DatePicker
           value={val ? dayjs(val) : null}
@@ -1152,6 +1190,7 @@ const GRNForm = () => {
       >
         <Space>
           <Button onClick={() => navigate('/warehouse/grn')} icon={<ArrowLeftOutlined />}>Back</Button>
+          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>Download Template</Button>
           {!isNew && <Button onClick={() => setEditMode(false)}>Cancel Edit</Button>}
         </Space>
       </PageHeader>
@@ -1221,11 +1260,19 @@ const GRNForm = () => {
                 </Form.Item>
               </Col>
             )}
-            <Col xs={24} sm={receiptType === 'inward_based' ? 4 : 8}>
+            {receiptType === 'direct' && (
+              <Col xs={24} sm={8}>
+                <Form.Item name="po_number" label="PO No. / Document of Delivery">
+                  <Input placeholder="Enter document number" />
+                </Form.Item>
+              </Col>
+            )}
+            {/* GRN Date hidden from form as requested */}
+            {/* <Col xs={24} sm={receiptType === 'inward_based' ? 4 : 8}>
               <Form.Item name="grn_date" label="GRN Date" rules={[{ required: true, message: 'Required' }]}>
-                <DatePicker style={{ width: '100%' }} format={DATE_FORMAT} />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
               </Form.Item>
-            </Col>
+            </Col> */}
           </Row>
 
           {/* PO Summary */}
@@ -1245,7 +1292,7 @@ const GRNForm = () => {
 
           <Row gutter={16}>
             <Col xs={24} sm={8}>
-              <Form.Item name="vendor_id" label="Vendor" rules={[{ required: true, message: 'Vendor is required' }]}>
+              <Form.Item name="vendor_id" label="Vendor">
                 <Select
                   options={vendors}
                   placeholder="Select vendor"
@@ -1309,7 +1356,7 @@ const GRNForm = () => {
           rowKey="key"
           pagination={false}
           size="small"
-          scroll={{ x: 1400 }}
+          scroll={{ x: 'max-content' }}
           loading={loadingPO}
           footer={() => (
             <Button type="dashed" onClick={addItemRow} icon={<PlusOutlined />} block>
@@ -1340,7 +1387,7 @@ const GRNForm = () => {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <Button onClick={() => navigate('/warehouse/grn')}>Cancel</Button>
           <Button type="primary" icon={<SendOutlined />} onClick={() => handleSubmit()} loading={submitting}>
-            Save &amp; Submit for QI
+            Save &amp; Submit
           </Button>
         </div>
       </Card>

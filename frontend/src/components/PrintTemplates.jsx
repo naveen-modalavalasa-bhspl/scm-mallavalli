@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, formatDate } from '../utils/helpers';
+import { formatCurrency, formatDate, formatDateTimeCustom } from '../utils/helpers';
 
 const COMPANY = {
   name: 'Bavya Health Services Pvt. Ltd.',
@@ -233,82 +233,228 @@ export const RFQPrint = React.forwardRef(({ data }, ref) => {
   );
 });
 
-/* ─────────────────── PURCHASE RECEIPT / GRN ─────────────────── */
-export const PurchaseReceiptPrint = React.forwardRef(({ data }, ref) => {
+/* ─────────────────── MATERIAL INWARD ─────────────────── */
+export const MaterialInwardPrint = React.forwardRef(({ data }, ref) => {
   if (!data) return null;
   const items = data.items || [];
-  const total = items.reduce((s, i) => s + (parseFloat(i.accepted_qty || i.quantity || 0) * parseFloat(i.rate || i.unit_price || 0)), 0);
-  const totalQty = items.reduce((s, i) => s + parseFloat(i.accepted_qty || i.quantity || 0), 0);
-  const grandTotal = total;
-  const roundedTotal = Math.round(grandTotal);
+  const totalQty = items.reduce((s, i) => s + parseFloat(i.received_qty || 0), 0);
+
+  const premiumStyles = `
+    .premium-grn { font-family: 'Inter', 'Segoe UI', sans-serif; color: #1e293b; background: #fff; padding: 30px 40px; }
+    .premium-grn-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
+    .premium-grn-title { font-size: 28px; font-weight: 900; color: #0f172a; letter-spacing: 1px; text-transform: uppercase; margin: 0; }
+    .premium-grn-subtitle { font-size: 14px; color: #64748b; margin-top: 6px; font-weight: 600; letter-spacing: 0.5px; }
+    .premium-grn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 35px; background: #f8fafc; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .premium-grn-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+    .premium-grn-value { font-size: 14px; color: #0f172a; font-weight: 700; }
+    .premium-grn-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; }
+    .premium-grn-table th { background: #0f172a; color: #ffffff; padding: 14px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 700; }
+    .premium-grn-table th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+    .premium-grn-table th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+    .premium-grn-table td { padding: 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #334155; vertical-align: middle; }
+    .premium-grn-table tr:last-child td { border-bottom: none; }
+    .premium-grn-table tr:nth-child(even) { background: #f8fafc; }
+    .premium-grn-totals { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .premium-grn-totals-box { background: #f8fafc; padding: 24px 32px; border-radius: 12px; border: 1px solid #e2e8f0; min-width: 320px; }
+    .premium-grn-totals-row { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 14px; color: #475569; font-weight: 600; }
+    .premium-grn-totals-row.grand { font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 0; padding-top: 16px; border-top: 2px solid #cbd5e1; }
+    .premium-grn-footer { margin-top: 70px; text-align: center; color: #94a3b8; font-size: 13px; font-weight: 700; letter-spacing: 3px; }
+    .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; letter-spacing: 0.5px; }
+  `;
 
   return (
-    <div ref={ref} className="print-document" style={{ position: 'relative' }}>
+    <div ref={ref} className="print-document premium-grn" style={{ position: 'relative' }}>
       <style>{printStyles}</style>
+      <style>{premiumStyles}</style>
+      
       {data.status === 'draft' && <div className="draft-watermark">DRAFT</div>}
 
-      <div style={{ textAlign: 'center', marginBottom: 20 }}>
-        <div style={{ fontSize: 24, fontWeight: 700, color: '#555' }}>PURCHASE RECEIPT</div>
-        <div style={{ fontSize: 12, color: '#999' }}>{data.grn_number || ''}</div>
+      <div className="premium-grn-header">
+        <div>
+          <h1 className="premium-grn-title">MATERIAL INWARD</h1>
+          <div className="premium-grn-subtitle">{data.inward_number || 'N/A'}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="status-badge">{data.status?.replace(/_/g, ' ') || 'DRAFT'}</div>
+        </div>
       </div>
 
-      <div style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, marginBottom: 10 }}>
-        {data.status?.toUpperCase() || 'DRAFT'}
+      <div className="premium-grn-grid">
+        <div><div className="premium-grn-label">Received Date</div><div className="premium-grn-value">{data.received_date ? formatDate(data.received_date) : '-'}</div></div>
+        <div><div className="premium-grn-label">Vendor</div><div className="premium-grn-value">{data.vendor_name || data.vendor_name_manual || '-'}</div></div>
+        <div><div className="premium-grn-label">Warehouse</div><div className="premium-grn-value">{data.warehouse_name || '-'}</div></div>
+        <div><div className="premium-grn-label">PO Number</div><div className="premium-grn-value">{data.po_number || '-'}</div></div>
+        
+        <div><div className="premium-grn-label">Vehicle No</div><div className="premium-grn-value">{data.vehicle_number || '-'}</div></div>
+        <div><div className="premium-grn-label">Driver Name</div><div className="premium-grn-value">{data.driver_name || '-'}</div></div>
+        <div style={{ gridColumn: 'span 2' }}><div className="premium-grn-label">Remarks</div><div className="premium-grn-value">{data.remarks || '-'}</div></div>
       </div>
 
-      <div style={{ textAlign: 'center', marginBottom: 15 }}>
-        <div><strong>Date:</strong></div>
-        <div>{formatDate(data.received_date || data.created_at)}</div>
-      </div>
-
-      <table>
-        <thead><tr>
-          <th style={{ width: 50 }}>Sr</th>
-          <th>Item</th>
-          <th style={{ width: 110, textAlign: 'right' }}>Accepted Quantity</th>
-          <th style={{ width: 90, textAlign: 'right' }}>Rate</th>
-          <th style={{ width: 90, textAlign: 'right' }}>Amount</th>
-        </tr></thead>
+      <table className="premium-grn-table">
+        <thead>
+          <tr>
+            <th style={{ width: '5%' }}>#</th>
+            <th style={{ width: '35%' }}>Item Description</th>
+            <th style={{ width: '10%' }}>UOM</th>
+            <th style={{ width: '15%', textAlign: 'right' }}>Ordered Qty</th>
+            <th style={{ width: '15%', textAlign: 'right' }}>Received Qty</th>
+            <th style={{ width: '20%' }}>Remarks</th>
+          </tr>
+        </thead>
         <tbody>
           {items.map((item, i) => {
-            const qty = parseFloat(item.accepted_qty || item.quantity || 0);
-            const rate = parseFloat(item.rate || item.unit_price || 0);
+            const orderedQty = parseFloat(item.ordered_qty || 0);
+            const receivedQty = parseFloat(item.received_qty || 0);
             return (
               <tr key={i}>
-                <td>{i + 1}</td>
-                <td>{item.item_name || item.name || '-'}</td>
-                <td style={{ textAlign: 'right' }}>{qty}</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(rate)}</td>
-                <td style={{ textAlign: 'right' }}>{formatCurrency(qty * rate)}</td>
+                <td><div style={{ fontWeight: 700, color: '#94a3b8' }}>{(i + 1).toString().padStart(2, '0')}</div></td>
+                <td>
+                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{item.item_name || item.item_name_manual || '-'}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600 }}>Code: {item.item_code || '-'}</div>
+                </td>
+                <td><div style={{ fontWeight: 600, fontSize: 13 }}>{item.uom_name || item.uom_manual || '-'}</div></td>
+                <td style={{ textAlign: 'right', fontWeight: 600, fontSize: 13, color: '#64748b' }}>{orderedQty}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 13 }}>{receivedQty}</td>
+                <td><div style={{ fontSize: 13 }}>{item.remarks || '-'}</div></td>
               </tr>
             );
           })}
         </tbody>
       </table>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
-        <div><strong>Total Quantity:</strong><br />{totalQty}</div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20 }}><span><strong>Total</strong></span><span>{formatCurrency(total)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, marginTop: 4 }}><span><strong>Grand Total:</strong></span><span>{formatCurrency(grandTotal)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, marginTop: 4 }}><span><strong>Rounded Total:</strong></span><span>{formatCurrency(roundedTotal)}</span></div>
+      <div className="premium-grn-totals">
+        <div className="premium-grn-totals-box">
+          <div className="premium-grn-totals-row">
+            <span>Total Items</span>
+            <span style={{ fontWeight: 800, color: '#0f172a' }}>{items.length}</span>
+          </div>
+          <div className="premium-grn-totals-row grand">
+            <span>Total Quantity Received</span>
+            <span style={{ fontWeight: 800, color: '#0f172a' }}>{totalQty}</span>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 25 }}>
-        <div><strong>Company Billing Address:</strong><br />{COMPANY.name}-Billing</div>
+      <div className="premium-grn-footer">
+      </div>
+    </div>
+  );
+});
+
+/* ─────────────────── PURCHASE RECEIPT / GRN ─────────────────── */
+export const PurchaseReceiptPrint = React.forwardRef(({ data }, ref) => {
+  if (!data) return null;
+  const items = data.items || [];
+  const total = items.reduce((s, i) => s + (parseFloat(i.accepted_qty || i.received_qty || i.quantity || 0) * parseFloat(i.rate || i.unit_price || 0)), 0);
+  const totalQty = items.reduce((s, i) => s + parseFloat(i.accepted_qty || i.received_qty || i.quantity || 0), 0);
+
+  const premiumStyles = `
+    .premium-grn { font-family: 'Inter', 'Segoe UI', sans-serif; color: #1e293b; background: #fff; padding: 30px 40px; }
+    .premium-grn-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
+    .premium-grn-title { font-size: 28px; font-weight: 900; color: #0f172a; letter-spacing: 1px; text-transform: uppercase; margin: 0; }
+    .premium-grn-subtitle { font-size: 14px; color: #64748b; margin-top: 6px; font-weight: 600; letter-spacing: 0.5px; }
+    .premium-grn-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 35px; background: #f8fafc; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .premium-grn-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+    .premium-grn-value { font-size: 14px; color: #0f172a; font-weight: 700; }
+    .premium-grn-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 30px; }
+    .premium-grn-table th { background: #0f172a; color: #ffffff; padding: 14px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: left; font-weight: 700; }
+    .premium-grn-table th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+    .premium-grn-table th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+    .premium-grn-table td { padding: 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #334155; vertical-align: middle; }
+    .premium-grn-table tr:last-child td { border-bottom: none; }
+    .premium-grn-table tr:nth-child(even) { background: #f8fafc; }
+    .premium-grn-totals { display: flex; justify-content: flex-end; margin-top: 20px; }
+    .premium-grn-totals-box { background: #f8fafc; padding: 24px 32px; border-radius: 12px; border: 1px solid #e2e8f0; min-width: 320px; }
+    .premium-grn-totals-row { display: flex; justify-content: space-between; margin-bottom: 14px; font-size: 14px; color: #475569; font-weight: 600; }
+    .premium-grn-totals-row.grand { font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 0; padding-top: 16px; border-top: 2px solid #cbd5e1; }
+    .premium-grn-footer { margin-top: 70px; text-align: center; color: #94a3b8; font-size: 13px; font-weight: 700; letter-spacing: 3px; }
+    .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; letter-spacing: 0.5px; }
+  `;
+
+  return (
+    <div ref={ref} className="print-document premium-grn" style={{ position: 'relative' }}>
+      <style>{printStyles}</style>
+      <style>{premiumStyles}</style>
+      
+      {data.status === 'draft' && <div className="draft-watermark">DRAFT</div>}
+
+      <div className="premium-grn-header">
+        <div>
+          <h1 className="premium-grn-title">GOODS RECEIPT NOTE</h1>
+          <div className="premium-grn-subtitle">{data.grn_number || 'N/A'}</div>
+        </div>
         <div style={{ textAlign: 'right' }}>
-          <strong>Billing Address:</strong><br />
-          {COMPANY.address.split(',').map((l, i) => <div key={i}>{l.trim()}</div>)}
-          <div>State Code: {COMPANY.stateCode}</div>
-          <div>GSTIN: {COMPANY.gstin}</div>
+          <div className="status-badge">{data.status?.replace(/_/g, ' ') || 'DRAFT'}</div>
         </div>
       </div>
 
-      <div className="signature-section">
-        <div className="signature-box"><div className="signature-line">Received By</div></div>
-        <div className="signature-box"><div className="signature-line">Checked By</div></div>
-        <div className="signature-box"><div className="signature-line">Authorized By</div></div>
+      <div className="premium-grn-grid">
+        <div><div className="premium-grn-label">Receipt Type</div><div className="premium-grn-value" style={{ textTransform: 'capitalize' }}>{data.receipt_type || '-'}</div></div>
+        <div><div className="premium-grn-label">Vendor</div><div className="premium-grn-value">{data.vendor_name || '-'}</div></div>
+        <div><div className="premium-grn-label">Warehouse</div><div className="premium-grn-value">{data.warehouse_name || '-'}</div></div>
+        <div><div className="premium-grn-label">PO / Doc</div><div className="premium-grn-value">{data.po_number || '-'}</div></div>
+        
+        <div><div className="premium-grn-label">Inward Ref</div><div className="premium-grn-value">{data.inward_number || '-'}</div></div>
+        <div><div className="premium-grn-label">Supplier Invoice</div><div className="premium-grn-value">{data.supplier_invoice || '-'}</div></div>
+        <div><div className="premium-grn-label">Vehicle No</div><div className="premium-grn-value">{data.vehicle_number || '-'}</div></div>
+        <div><div className="premium-grn-label">Received By</div><div className="premium-grn-value">{data.received_by_name || data.received_by || '-'}</div></div>
+      </div>
+
+      <table className="premium-grn-table">
+        <thead>
+          <tr>
+            <th style={{ width: '3%' }}>#</th>
+            <th style={{ width: '32%' }}>Item Description</th>
+            <th style={{ width: '8%' }}>UOM</th>
+            <th style={{ width: '12%' }}>Batch No</th>
+            <th style={{ width: '12%' }}>Exp/Warranty</th>
+            <th style={{ width: '10%', textAlign: 'right' }}>Qty</th>
+            <th style={{ width: '10%', textAlign: 'right' }}>Rate</th>
+            <th style={{ width: '13%', textAlign: 'right' }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, i) => {
+            const qty = parseFloat(item.accepted_qty || item.received_qty || item.quantity || 0);
+            const rate = parseFloat(item.rate || item.unit_price || 0);
+            return (
+              <tr key={i}>
+                <td><div style={{ fontWeight: 700, color: '#94a3b8' }}>{(i + 1).toString().padStart(2, '0')}</div></td>
+                <td>
+                  <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>{item.item_name || item.name || '-'}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, fontWeight: 600 }}>Code: {item.item_code || '-'}</div>
+                </td>
+                <td><div style={{ fontWeight: 600, fontSize: 13 }}>{item.uom_name || item.uom || '-'}</div></td>
+                <td><div style={{ fontSize: 13 }}>{item.batch_number || '-'}</div></td>
+                <td><div style={{ fontSize: 13 }}>{item.expiry_date ? formatDate(item.expiry_date) : '-'}</div></td>
+                <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 13 }}>{qty}</td>
+                <td style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{formatCurrency(rate)}</td>
+                <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: 13 }}>{formatCurrency(qty * rate)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <div className="premium-grn-totals">
+        <div className="premium-grn-totals-box">
+          <div className="premium-grn-totals-row">
+            <span>Total Items</span>
+            <span style={{ fontWeight: 800, color: '#0f172a' }}>{items.length}</span>
+          </div>
+          <div className="premium-grn-totals-row">
+            <span>Total Quantity</span>
+            <span style={{ fontWeight: 800, color: '#0f172a' }}>{totalQty}</span>
+          </div>
+          <div className="premium-grn-totals-row grand">
+            <span>Total Amount</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="premium-grn-footer">
+        {data.created_at ? formatDateTimeCustom(data.created_at, 'ssmmHHYYMMDD') : '-'}
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ class GoodsReceiptNote(Base):
     grn_number = Column(String(50), unique=True, nullable=False)
     po_id = Column(BigInteger, ForeignKey("purchase_orders.id"))
     inward_id = Column(BigInteger, ForeignKey("material_inwards.id"), nullable=True)
-    vendor_id = Column(BigInteger, ForeignKey("vendors.id"), nullable=False)
+    vendor_id = Column(BigInteger, ForeignKey("vendors.id"), nullable=True)
     warehouse_id = Column(BigInteger, ForeignKey("warehouses.id"), nullable=False)
     grn_date = Column(DateTime, nullable=False)
     supplier_invoice = Column(String(100))

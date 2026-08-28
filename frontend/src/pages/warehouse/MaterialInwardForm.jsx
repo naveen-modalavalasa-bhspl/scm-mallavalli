@@ -1,23 +1,36 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Button, Form, Input, InputNumber, Select, Space, Table,
   DatePicker, Tag, Divider, Row, Col, Spin, message,
 } from 'antd';
-import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
-import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeftOutlined, PlusOutlined, DeleteOutlined, SearchOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx-js-style';
 import PageHeader from '../../components/PageHeader';
 import api from '../../config/api';
 import { getErrorMessage, formatDateForAPI, parseDateForPicker } from '../../utils/helpers';
+import { useReactToPrint } from 'react-to-print';
+import { MaterialInwardPrint } from '../../components/PrintTemplates';
 
 const MaterialInwardForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = !id || id === 'new';
 
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editMode, setEditMode] = useState(location.state?.edit || false);
+  const [inwardStatus, setInwardStatus] = useState(null);
+  const [fullData, setFullData] = useState({});
+
+  const printRef = useRef();
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+    documentTitle: `Material_Inward_${form.getFieldValue('inward_number') || 'Draft'}`,
+  });
 
   // Lookups
   const [warehouses, setWarehouses] = useState([]);
@@ -111,6 +124,8 @@ const MaterialInwardForm = () => {
     try {
       const res = await api.get(`/warehouse/inwards/${id}`);
       const data = res.data;
+      setInwardStatus(data.status);
+      setFullData(data);
       form.setFieldsValue({
         ...data,
         received_date: parseDateForPicker(data.received_date),
@@ -178,6 +193,19 @@ const MaterialInwardForm = () => {
   };
 
   const handleItemFieldChange = (key, field, value) => {
+    if (field === 'item_id' && value) {
+      const exists = items.some((i) => i.key !== key && String(i.item_id) === String(value));
+      if (exists) {
+        const master = itemMaster.find((m) => String(m.value) === String(value));
+        let itemName = 'Item';
+        if (master) {
+          itemName = master.label.includes(' - ') ? master.label.split(' - ').slice(1).join(' - ') : master.label;
+        }
+        message.warning(`${itemName} already added. Just increase that qty.`);
+        return;
+      }
+    }
+
     setItems((prev) => prev.map((i) => {
       if (i.key !== key) return i;
       const updated = { ...i, [field]: value };
@@ -243,9 +271,16 @@ const MaterialInwardForm = () => {
       };
 
       setSubmitting(true);
-      await api.post('/warehouse/inwards', payload);
-      message.success('Material Inward created successfully');
-      navigate('/warehouse/material-inward');
+      if (isNew) {
+        await api.post('/warehouse/inwards', payload);
+        message.success('Material Inward created successfully');
+        navigate('/warehouse/material-inward');
+      } else {
+        await api.put(`/warehouse/inwards/${id}`, payload);
+        message.success('Material Inward updated successfully');
+        setEditMode(false);
+        fetchInward();
+      }
     } catch (err) {
       if (err.errorFields) {
         message.error('Please fill all required fields');
@@ -257,13 +292,42 @@ const MaterialInwardForm = () => {
     }
   };
 
+  const downloadTemplate = () => {
+    const wsData = [
+      ['PO Number', 'Vendor ID / Code', 'Vendor Name (Manual)', 'Warehouse', 'Received Date', 'Vehicle Number', 'Driver Name', 'Header Remarks', 'Item ID / Code', 'Item Name (Manual)', 'Ordered Qty', 'Received Qty', 'UOM', 'Item Remarks'],
+      ['PO-12345', 'V001', '', 'Main Warehouse', '01-Jan-2024', 'MH-12-AB-1234', 'John Doe', 'Header remarks here', 'ITEM-001', '', '100', '100', 'Nos', 'Item remarks here']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    
+    // Style headers
+    const mandatoryCols = ['Warehouse', 'Received Date', 'Item ID / Code', 'Received Qty', 'UOM'];
+    for (let c = 0; c < wsData[0].length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ c: c, r: 0 });
+      if (!ws[cellRef]) continue;
+      const isMandatory = mandatoryCols.includes(wsData[0][c]);
+      ws[cellRef].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: isMandatory ? "EF4444" : "3B82F6" } }, // Red for mandatory, Blue for optional
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+
+    // Auto-size columns slightly
+    const colWidths = wsData[0].map(col => ({ wch: Math.max(15, col.length + 2) }));
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Material Inward");
+    XLSX.writeFile(wb, "Material_Inward_Template.xlsx");
+  };
+
   const itemColumns = [
     {
       title: 'Item',
       dataIndex: 'item_id',
       width: 240,
       render: (val, record) => {
-        if (!isNew) {
+        if (!isNew && !editMode) {
           return (
             <span>
               {record.item_code && record.item_name
@@ -295,6 +359,7 @@ const MaterialInwardForm = () => {
             options={options}
             style={{ width: '100%' }}
             onChange={(v) => handleItemFieldChange(record.key, 'item_id', v)}
+            disabled={editMode && !!record.id}
           />
         );
       },
@@ -304,7 +369,7 @@ const MaterialInwardForm = () => {
       title: 'Ordered Qty',
       dataIndex: 'ordered_qty',
       width: 110,
-      render: (val, record) => !isNew ? (val ?? 0) : (
+      render: (val, record) => !(isNew || editMode) ? (val ?? 0) : (
         <InputNumber
           value={val}
           min={0}
@@ -317,7 +382,7 @@ const MaterialInwardForm = () => {
       title: 'Received Qty',
       dataIndex: 'received_qty',
       width: 110,
-      render: (val, record) => !isNew ? (val ?? 0) : (
+      render: (val, record) => !(isNew || editMode) ? (val ?? 0) : (
         <InputNumber
           value={val}
           min={0}
@@ -331,7 +396,7 @@ const MaterialInwardForm = () => {
       dataIndex: 'uom_id',
       width: 140,
       render: (val, record) => {
-        if (!isNew) {
+        if (!isNew && !editMode) {
           return (
             <span>
               {record.uom_name || uoms.find((u) => String(u.value) === String(val))?.label || record.uom_manual || '-'}
@@ -357,6 +422,7 @@ const MaterialInwardForm = () => {
             options={options}
             style={{ width: '100%' }}
             onChange={(v) => handleItemFieldChange(record.key, 'uom_id', v)}
+            disabled={editMode && !!record.id}
           />
         );
       },
@@ -365,23 +431,23 @@ const MaterialInwardForm = () => {
       title: 'Remarks',
       dataIndex: 'remarks',
       width: 150,
-      render: (val, record) => !isNew ? (val || '-') : (
+      render: (val, record) => !(isNew || editMode) ? (val || '-') : (
         <Input
           value={val}
-          placeholder="Remarks"
           onChange={(e) => handleItemFieldChange(record.key, 'remarks', e.target.value)}
         />
       ),
     },
   ];
 
-  if (isNew) {
+  if (isNew || editMode) {
     itemColumns.push({
-      title: '',
-      width: 50,
-      render: (_, record) => (
-        <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record.key)} />
-      ),
+      title: 'Action',
+      width: 60,
+      render: (_, record) =>
+        (isNew || editMode) && items.length > 1 ? (
+          <Button danger type="text" icon={<DeleteOutlined />} onClick={() => handleRemoveItem(record.key)} />
+        ) : null,
     });
   }
 
@@ -394,15 +460,49 @@ const MaterialInwardForm = () => {
       <PageHeader title={isNew ? 'New Material Inward' : `Material Inward: ${form.getFieldValue('inward_number') || ''}`} subtitle="Record incoming materials at the warehouse">
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/warehouse/material-inward')}>Back to Inwards</Button>
+          {!isNew && (
+            <Button icon={<PrinterOutlined />} onClick={handlePrint}>Print PDF</Button>
+          )}
+          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>Download Template</Button>
           {isNew && (
             <Button type="primary" onClick={handleSubmit} loading={submitting}>
               Create
             </Button>
           )}
+          {!isNew && editMode && (
+            <>
+              <Button onClick={() => setEditMode(false)}>Cancel</Button>
+              <Button type="primary" onClick={handleSubmit} loading={submitting}>
+                Save Changes
+              </Button>
+            </>
+          )}
         </Space>
       </PageHeader>
-      <Card>
-        <Form form={form} layout="vertical" disabled={!isNew}>
+      <Card className={!(isNew || editMode) ? 'view-mode-form' : ''}>
+        <style>{`
+          .view-mode-form .ant-input-disabled,
+          .view-mode-form .ant-select-disabled .ant-select-selector,
+          .view-mode-form .ant-picker-disabled,
+          .view-mode-form .ant-input-number-disabled {
+            color: #0f172a !important;
+            background-color: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+            font-weight: 700 !important;
+            -webkit-text-fill-color: #0f172a !important;
+          }
+          .view-mode-form .ant-select-disabled .ant-select-selection-item {
+            color: #0f172a !important;
+            font-weight: 700 !important;
+            -webkit-text-fill-color: #0f172a !important;
+          }
+          .view-mode-form .ant-input-disabled::placeholder,
+          .view-mode-form .ant-select-disabled .ant-select-selection-placeholder,
+          .view-mode-form .ant-picker-disabled input::placeholder {
+            -webkit-text-fill-color: #94a3b8 !important;
+          }
+        `}</style>
+        <Form form={form} layout="vertical" disabled={!(isNew || editMode)}>
           <Divider orientation="left">PO Reference (Optional)</Divider>
           <Row gutter={16}>
             <Col span={10}>
@@ -462,13 +562,6 @@ const MaterialInwardForm = () => {
         </Form>
 
         <Divider orientation="left">Items</Divider>
-        {isNew && (
-          <div style={{ marginBottom: 12 }}>
-            <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddItem}>
-              Add Item
-            </Button>
-          </div>
-        )}
         <Table
           dataSource={items}
           columns={itemColumns}
@@ -478,7 +571,20 @@ const MaterialInwardForm = () => {
           scroll={{ x: 900 }}
           locale={{ emptyText: 'No items added yet' }}
         />
+        {(isNew || editMode) && (
+          <div style={{ marginTop: 12 }}>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={handleAddItem}>
+              Add Item
+            </Button>
+          </div>
+        )}
       </Card>
+      
+      {!isNew && (
+        <div style={{ display: 'none' }}>
+          <MaterialInwardPrint ref={printRef} data={fullData} />
+        </div>
+      )}
     </div>
   );
 };

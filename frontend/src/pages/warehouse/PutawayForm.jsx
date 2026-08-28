@@ -696,21 +696,7 @@ const PutawayForm = () => {
     },
     {
       title: 'Batch', dataIndex: 'batch_number', width: 150,
-      render: (v, record) => {
-        if (record.status === 'done' || record.status === 'skipped') {
-          return <Tag color="blue">{v || '-'}</Tag>;
-        }
-        return (
-          <Input
-            size="small"
-            placeholder="Enter batch #"
-            value={record.batch_number || ''}
-            onChange={(e) => updatePutawayItemBatch(record.key, e.target.value)}
-            disabled={record.status === 'done' || record.status === 'skipped'}
-            style={{ width: '100%' }}
-          />
-        );
-      },
+      render: (v) => <Tag color="blue">{v || '-'}</Tag>,
     },
     {
       title: 'Status', dataIndex: 'status', width: 110,

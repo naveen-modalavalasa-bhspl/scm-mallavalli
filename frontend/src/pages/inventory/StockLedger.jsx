@@ -114,10 +114,6 @@ const StockLedger = () => {
         'Qty In': r.qty_in || 0,
         'Qty Out': r.qty_out || 0,
         'Balance Qty': r.balance_qty || 0,
-        'Rate': r.rate || 0,
-        'Value In': r.value_in || 0,
-        'Value Out': r.value_out || 0,
-        'Balance Value': r.balance_value || 0,
         'Created By': r.created_by || '',
       }));
       downloadExcel(exportData, 'Stock_Ledger');
@@ -203,11 +199,13 @@ const StockLedger = () => {
       title: 'Reference',
       dataIndex: 'reference',
       width: 160,
-      render: (val) => (
-        <Tooltip title={val}>
-          <Text ellipsis style={{ maxWidth: 140 }}>{val || '-'}</Text>
-        </Tooltip>
-      ),
+      render: (val) => {
+        return (
+          <Tooltip title={val}>
+            <Text ellipsis style={{ maxWidth: 140 }}>{val || '-'}</Text>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Qty In',
@@ -234,38 +232,7 @@ const StockLedger = () => {
       align: 'right',
       render: (val) => <Text strong>{formatNumber(val || 0)}</Text>,
     },
-    {
-      title: 'Rate',
-      dataIndex: 'rate',
-      width: 110,
-      align: 'right',
-      render: (val) => formatCurrency(val),
-    },
-    {
-      title: 'Value In',
-      dataIndex: 'value_in',
-      width: 120,
-      align: 'right',
-      render: (val) => (
-        val > 0 ? <Text style={{ color: '#52c41a' }}>{formatCurrency(val)}</Text> : <Text type="secondary">-</Text>
-      ),
-    },
-    {
-      title: 'Value Out',
-      dataIndex: 'value_out',
-      width: 120,
-      align: 'right',
-      render: (val) => (
-        val > 0 ? <Text style={{ color: '#f5222d' }}>{formatCurrency(val)}</Text> : <Text type="secondary">-</Text>
-      ),
-    },
-    {
-      title: 'Balance Value',
-      dataIndex: 'balance_value',
-      width: 130,
-      align: 'right',
-      render: (val) => <Text strong>{formatCurrency(val)}</Text>,
-    },
+
     {
       title: 'Created By',
       dataIndex: 'created_by',

@@ -4,7 +4,7 @@ import {
   Button, Select, Space, Table, Popconfirm, message, Tag,
 } from 'antd';
 import {
-  PlusOutlined, EyeOutlined, CheckCircleOutlined,
+  PlusOutlined, EyeOutlined, CheckCircleOutlined, EditOutlined
 } from '@ant-design/icons';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
@@ -135,14 +135,17 @@ const MaterialInward = () => {
         <Space size="small">
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)} />
           {record.status === 'draft' && (
-            <Popconfirm
-              title="Mark as received?"
-              description="This will update the status to 'Received'."
-              onConfirm={() => handleComplete(record.id)}
-              okText="Confirm"
-            >
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }} />
-            </Popconfirm>
+            <>
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/warehouse/material-inward/${record.id}`, { state: { edit: true } })} />
+              <Popconfirm
+                title="Mark as received?"
+                description="This will update the status to 'Received'."
+                onConfirm={() => handleComplete(record.id)}
+                okText="Confirm"
+              >
+                <Button type="link" size="small" icon={<CheckCircleOutlined />} style={{ color: '#52c41a' }} />
+              </Popconfirm>
+            </>
           )}
         </Space>
       ),

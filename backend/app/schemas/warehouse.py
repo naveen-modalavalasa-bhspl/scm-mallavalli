@@ -73,7 +73,7 @@ class GRNCreate(BaseModel):
     po_id: Optional[int] = None
     inward_id: Optional[int] = None
     po_number: Optional[str] = None
-    vendor_id: int
+    vendor_id: Optional[int] = None
     warehouse_id: int
     grn_date: date
     supplier_invoice: Optional[str] = None
@@ -153,7 +153,7 @@ class GRNResponse(BaseModel):
     po_number: Optional[str] = None
     inward_id: Optional[int] = None
     inward_number: Optional[str] = None
-    vendor_id: int
+    vendor_id: Optional[int] = None
     vendor_name: Optional[str] = None
     warehouse_id: int
     warehouse_name: Optional[str] = None
@@ -905,6 +905,42 @@ class MaterialInwardCreate(BaseModel):
             raise ValueError("At least one item is required")
         return v
 
+
+class MaterialInwardItemUpdate(BaseModel):
+    id: Optional[int] = None
+    item_id: Optional[int] = None
+    item_name_manual: Optional[str] = None
+    ordered_qty: Decimal = Decimal("0")
+    received_qty: Decimal
+    uom_id: Optional[int] = None
+    uom_manual: Optional[str] = None
+    remarks: Optional[str] = None
+
+    @field_validator("received_qty")
+    @classmethod
+    def val_qty(cls, v):
+        if v <= 0:
+            raise ValueError("Received quantity must be greater than zero")
+        return v
+
+class MaterialInwardUpdate(BaseModel):
+    po_id: Optional[int] = None
+    po_number: Optional[str] = None
+    vendor_id: Optional[int] = None
+    vendor_name_manual: Optional[str] = None
+    warehouse_id: int
+    received_date: datetime
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    remarks: Optional[str] = None
+    items: List[MaterialInwardItemUpdate]
+
+    @field_validator("items")
+    @classmethod
+    def val_items_not_empty(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError("At least one item is required")
+        return v
 
 class MaterialInwardItemResponse(BaseModel):
     id: int

@@ -134,13 +134,13 @@ const VehicleMaterialIssues = () => {
       width: 140,
       render: (v) => v || '-',
     },
-    {
-      title: 'Department',
-      dataIndex: 'department',
-      key: 'department',
-      width: 140,
-      render: (v) => v || '-',
-    },
+    // {
+    //   title: 'Department',
+    //   dataIndex: 'department',
+    //   key: 'department',
+    //   width: 140,
+    //   render: (v) => v || '-',
+    // },
     {
       title: 'Issue Date',
       dataIndex: 'issue_date',

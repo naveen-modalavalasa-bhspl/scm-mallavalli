@@ -78,6 +78,12 @@ export const formatDateTime = (date) => {
   return d.isValid() ? d.tz(IST_TZ).format(DATETIME_FORMAT) : dayjs(date).format(DATETIME_FORMAT);
 };
 
+export const formatDateTimeCustom = (date, formatStr) => {
+  if (!date) return '-';
+  const d = dayjs.utc(date);
+  return d.isValid() ? d.tz(IST_TZ).format(formatStr) : dayjs(date).format(formatStr);
+};
+
 export const formatDateForAPI = (date) => {
   // BUG-FE-127: distinguish between "no value" and "0" / falsy-but-valid.
   // Empty string / null / undefined return undefined so the caller can omit
