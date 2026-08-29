@@ -1649,3 +1649,25 @@ export const printVehicleIssueToPDF = (record) => {
 };
 
 
+
+// A batch cannot be issued once it has reached its expiry date. The backend
+// enforces `expiry_date <= today` (a batch expiring TODAY is already unusable —
+// see create_material_issue / submit_material_issue), so issue screens must use
+// exactly the same rule when building batch dropdowns. Offering a batch the
+// server will reject just gets the operator an error after they have already
+// picked quantities and unit codes.
+export const isBatchExpired = (batch) => {
+  const exp = batch?.expiry_date;
+  if (!exp) return false;
+  const d = dayjs(exp);
+  if (!d.isValid()) return false;
+  return !d.startOf('day').isAfter(dayjs().startOf('day'));
+};
+
+// Split a batch list into what an issue screen may offer and what it must hide.
+export const splitIssuableBatches = (batches = []) => {
+  const issuable = [];
+  const expired = [];
+  batches.forEach((b) => (isBatchExpired(b) ? expired : issuable).push(b));
+  return { issuable, expired };
+};

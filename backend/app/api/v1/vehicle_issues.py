@@ -197,12 +197,17 @@ async def create_vehicle_issue(
     if is_central:
         for item in payload.items:
             if item.serial_numbers:
-                sn_stmt = select(SerialNumber).where(
+                sn_conds = [
                     SerialNumber.item_id == item.item_id,
                     SerialNumber.serial_number.in_(item.serial_numbers),
                     SerialNumber.warehouse_id == payload.warehouse_id,
-                    SerialNumber.status == "available"
-                )
+                    SerialNumber.status == "available",
+                ]
+                # A code belongs to the batch it was minted against — scope the
+                # status flip to the batch on the line.
+                if item.batch_id is not None:
+                    sn_conds.append(SerialNumber.batch_id == item.batch_id)
+                sn_stmt = select(SerialNumber).where(*sn_conds)
                 sn_rows = (await db.execute(sn_stmt)).scalars().all()
                 for sn in sn_rows:
                     sn.status = "issued"
@@ -660,12 +665,15 @@ async def issue_vehicle_material(
     if is_central:
         for item in vi.items:
             if item.serial_numbers:
-                sn_stmt = select(SerialNumber).where(
+                sn_conds = [
                     SerialNumber.item_id == item.item_id,
                     SerialNumber.serial_number.in_(item.serial_numbers),
                     SerialNumber.warehouse_id == vi.warehouse_id,
-                    SerialNumber.status == "available"
-                )
+                    SerialNumber.status == "available",
+                ]
+                if item.batch_id is not None:
+                    sn_conds.append(SerialNumber.batch_id == item.batch_id)
+                sn_stmt = select(SerialNumber).where(*sn_conds)
                 sn_rows = (await db.execute(sn_stmt)).scalars().all()
                 for sn in sn_rows:
                     sn.status = "issued"
@@ -761,12 +769,15 @@ async def cancel_vehicle_issue(
         # Revert serial status
         for item in vi.items:
             if item.serial_numbers:
-                sn_stmt = select(SerialNumber).where(
+                sn_conds = [
                     SerialNumber.item_id == item.item_id,
                     SerialNumber.serial_number.in_(item.serial_numbers),
                     SerialNumber.warehouse_id == vi.warehouse_id,
-                    SerialNumber.status == "issued"
-                )
+                    SerialNumber.status == "issued",
+                ]
+                if item.batch_id is not None:
+                    sn_conds.append(SerialNumber.batch_id == item.batch_id)
+                sn_stmt = select(SerialNumber).where(*sn_conds)
                 sn_rows = (await db.execute(sn_stmt)).scalars().all()
                 for sn in sn_rows:
                     sn.status = "available"

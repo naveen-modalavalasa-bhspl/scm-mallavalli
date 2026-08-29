@@ -3309,6 +3309,15 @@ async def clean_serial_numbers(db: AsyncSession, item_id: int, serials: Optional
     return cleaned
 
 
+async def _batch_label(db: AsyncSession, batch_id: int) -> str:
+    """Human-readable batch number for validation messages."""
+    from app.models.warehouse import Batch as _BatchModel
+    num = (await db.execute(
+        select(_BatchModel.batch_number).where(_BatchModel.id == batch_id)
+    )).scalar()
+    return num or f"#{batch_id}"
+
+
 async def validate_material_issue_items_flow(
     db: AsyncSession,
     warehouse_id: int,
@@ -3431,6 +3440,48 @@ async def validate_material_issue_items_flow(
                 status_code=400,
                 detail=f"Duplicate serial/asset codes provided for item {m.name}."
             )
+
+        # 4. Every code must really be available in the cell being issued from.
+        #    A unit code belongs to the batch it was minted against, so picking
+        #    batch A on the line and then a code that lives in batch B has to be
+        #    rejected here rather than quietly issuing the wrong units. This was
+        #    only checked at submit; a draft could be saved with mismatched
+        #    codes and only blow up later.
+        if cleaned_sns:
+            sn_conds = [
+                SerialNumber.item_id == it.item_id,
+                SerialNumber.serial_number.in_(cleaned_sns),
+                SerialNumber.warehouse_id == warehouse_id,
+                SerialNumber.status == "available",
+            ]
+            if is_central and it.bin_id is not None:
+                sn_conds.append(SerialNumber.bin_id == it.bin_id)
+            if is_central and it.batch_id is not None:
+                sn_conds.append(SerialNumber.batch_id == it.batch_id)
+
+            found = {
+                r[0] for r in (await db.execute(
+                    select(SerialNumber.serial_number).where(and_(*sn_conds))
+                )).all()
+            }
+            missing = [s for s in cleaned_sns if s not in found]
+            if missing:
+                scope = "the selected warehouse"
+                if is_central and it.batch_id is not None:
+                    batch_label = await _batch_label(db, it.batch_id)
+                    scope = f"batch {batch_label}"
+                    if it.bin_id is not None:
+                        scope += " in the selected bin"
+                elif is_central and it.bin_id is not None:
+                    scope = "the selected bin"
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"{m.name}: these serial/asset codes are not available in "
+                        f"{scope}: {', '.join(missing[:20])}"
+                        + (f" (+{len(missing) - 20} more)" if len(missing) > 20 else "")
+                    ),
+                )
 
 
 @router.post("/material-issues", status_code=201, dependencies=[Depends(require_key("warehouse-material-issues"))])

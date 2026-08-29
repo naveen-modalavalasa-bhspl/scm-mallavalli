@@ -48,13 +48,19 @@ const UnitCodePopover = ({ record, preview, total, isAsset, onShowBarcode }) => 
         params: {
           item_id: record.item_id,
           warehouse_id: record.warehouse_id,
+          // Codes belong to the batch they were minted against — asking for
+          // the whole warehouse mixed other batches' codes into this cell.
+          batch_id: record.batch_id ?? undefined,
+          bin_id: record.bin_id ?? undefined,
           page: 1,
           page_size: 2000,
         },
       });
       const rows = res?.data?.items ?? res?.items ?? [];
-      const list = rows.map((r) => r[field] || r.serial_number).filter(Boolean);
-      if (list.length) setCodes(list);
+      // Only real asset/consumable codes — a raw serial number is not one, and
+      // falling back to it is what put bare serials in this list.
+      const list = rows.map((r) => r[field]).filter(Boolean);
+      setCodes(list);
       setLoaded(true);
     } catch {
       message.error('Could not load the full code list. Showing the first page.');
@@ -146,16 +152,35 @@ const BatchCodesGrid = ({ codes, batch, drillDownItem, whName, onShowBarcode }) 
     return `Material: ${matCode}\nItem: ${itemName}\nBatch: ${bNum}\nCode: ${code}\nWarehouse: ${whName}\n${expLabel}: ${expDate}`;
   };
 
+  // Quantity received while the item's unit-code toggle was off carries no
+  // code at all, so a batch can legitimately hold fewer codes than units.
+  const availQty = Math.round(Number(batch?.available_qty) || 0);
+  const uncoded = Math.max(availQty - codes.length, 0);
+
   if (codes.length === 0) {
-    return <Text type="secondary" style={{ fontSize: 12 }}>No codes generated for this batch</Text>;
+    return (
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        No unit codes for this batch{availQty > 0 ? ` (${formatNumber(availQty)} units)` : ''} — it was
+        received with unit-code generation turned off.
+      </Text>
+    );
   }
 
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          QR Labels & Codes ({filteredCodes.length} of {codes.length}):
-        </Text>
+        <Space size={8} wrap>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            QR Labels & Codes ({filteredCodes.length} of {codes.length}):
+          </Text>
+          {uncoded > 0 && (
+            <Tooltip title="These units were received while unit-code generation was turned off, so no code was minted for them.">
+              <Tag color="default" style={{ fontSize: 11, margin: 0 }}>
+                {formatNumber(uncoded)} of {formatNumber(availQty)} units without a code
+              </Tag>
+            </Tooltip>
+          )}
+        </Space>
         <Input
           placeholder="Search codes..."
           prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
@@ -644,7 +669,9 @@ const StockBalance = () => {
         if (!record.has_serial) return '-';
         const list = serials || [];
         // list is only the preview slice; serial_count is the real total.
-        const total = record.available_qty || 0;
+        // (This used to read available_qty, which reports the stock quantity —
+        // not how many serial rows actually exist.)
+        const total = record.serial_count ?? list.length;
         if (total === 0) return <Text type="secondary">None</Text>;
         const popoverContent = (
           <div style={{ maxHeight: 200, overflowY: 'auto', minWidth: 160 }}>
@@ -673,32 +700,11 @@ const StockBalance = () => {
         );
       },
     },
-    {
-      title: 'Asset/Consumable Code',
-      dataIndex: 'asset_codes',
-      width: 135,
-      render: (assetCodes, record) => {
-        if (record.item_type !== 'asset' && record.item_type !== 'consumable') return '-';
-        const isAsset = record.item_type === 'asset';
-        const list = isAsset ? (record.asset_codes || []) : (record.consumable_codes || []);
-        const total = record.available_qty || 0;
-        if (total === 0) return <Text type="secondary">None</Text>;
-        return (
-          <UnitCodePopover
-            record={record}
-            preview={list}
-            total={total}
-            isAsset={isAsset}
-            onShowBarcode={(code, rec) => {
-              setBarcodeDisplayVal(code);
-              setBarcodeDisplayLabel(rec.item_name || '');
-              setBarcodeDisplaySub(`${rec.item_code || ''} | Batch: ${rec.batch_number || rec.batch_name || '-'}`);
-              setBarcodeDisplayOpen(true);
-            }}
-          />
-        );
-      },
-    },
+    // NOTE: the "Asset/Consumable Code" column used to sit here. A grouped list
+    // row spans every batch of an item, so its code count was meaningless (it
+    // rendered available_qty, which counts stock, not codes) and its popover
+    // mixed batches together. Unit codes are shown per batch in the View
+    // breakdown instead.
     {
       title: 'Available Qty',
       dataIndex: 'available_qty',
@@ -828,8 +834,10 @@ const StockBalance = () => {
         if (record.item_type !== 'asset' && record.item_type !== 'consumable') return '-';
         const isAsset = record.item_type === 'asset';
         const list = isAsset ? (record.asset_codes || []) : (record.consumable_codes || []);
-        const total = (isAsset ? record.asset_code_count : record.consumable_code_count) ?? list.length;
-        if (total === 0) return <Text type="secondary">None</Text>;
+        // Breakdown rows carry their batch's full code list already, so its
+        // length IS the total — no separate count to reconcile.
+        const total = list.length;
+        if (total === 0) return <Text type="secondary">No codes</Text>;
         return (
           <UnitCodePopover
             record={record}
@@ -1220,7 +1228,7 @@ const StockBalance = () => {
           exportFileName="Stock_Balance"
           showExport={false}
           toolbar={filterToolbar}
-          scroll={{ x: 1800 }}
+          scroll={{ x: 1665 }}
           onRow={(record) => ({
             className: getRowClassName(record),
           })}

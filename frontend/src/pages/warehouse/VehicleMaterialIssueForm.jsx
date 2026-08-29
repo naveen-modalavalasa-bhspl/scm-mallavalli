@@ -20,7 +20,8 @@ import api from '../../config/api';
 import useAuthStore from '../../store/authStore';
 import {
   formatDate, formatCurrency, formatNumber, getErrorMessage,
-  formatDateForAPI, exportDetailsToExcel, printDetailsToPDF
+  formatDateForAPI, exportDetailsToExcel, printDetailsToPDF,
+  splitIssuableBatches
 } from '../../utils/helpers';
 import { DATE_FORMAT } from '../../utils/constants';
 
@@ -1355,9 +1356,34 @@ const VehicleMaterialIssueForm = () => {
           );
         }
 
-        let displayedBatches = [...details.batches];
+        // An expired batch is rejected by the server on submit, so never offer
+        // one here — the operator would otherwise pick quantities and unit codes
+        // only to be told "Batch X expired/expires today — cannot issue".
+        const { issuable: issuableBatches, expired: expiredBatches } =
+          splitIssuableBatches(details.batches);
+
+        if (record.has_batch && issuableBatches.length === 0) {
+          return (
+            <Tooltip title={`Every batch in stock has expired: ${
+              expiredBatches.map((b) => b.batch_number).join(', ')
+            }`}>
+              <Select
+                value={undefined}
+                disabled
+                placeholder="All batches expired"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Tooltip>
+          );
+        }
+
+        // Sort and filter batches based on requested qty and expiry date
+        let displayedBatches = [...issuableBatches];
         displayedBatches.sort((a, b) => {
-          if (a.expiry_date && b.expiry_date) return new Date(a.expiry_date) - new Date(b.expiry_date);
+          if (a.expiry_date && b.expiry_date) {
+            return new Date(a.expiry_date) - new Date(b.expiry_date);
+          }
           if (a.expiry_date) return -1;
           if (b.expiry_date) return 1;
           return 0;
@@ -1415,10 +1441,21 @@ const VehicleMaterialIssueForm = () => {
                 ...rateUpdate
               });
             }}
-            options={displayedBatches.map((b) => ({
-              label: `${b.batch_number}${b.expiry_date ? ` (Exp: ${b.expiry_date})` : ''}${b.rate > 0 ? ` — ₹${b.rate}` : ''} - Qty: ${formatNumber(b.qty)}`,
-              value: b.id,
-            }))}
+            options={[
+              ...displayedBatches.map((b) => ({
+                label: `${b.batch_number}${b.expiry_date ? ` (Exp: ${b.expiry_date})` : ''}${b.rate > 0 ? ` — ₹${b.rate}` : ''} - Qty: ${formatNumber(b.qty)}`,
+                value: b.id,
+              })),
+              // Tell the operator why the on-hand quantity does not add up,
+              // instead of silently showing them fewer batches than exist.
+              ...(expiredBatches.length > 0
+                ? [{
+                    label: `${expiredBatches.length} expired batch(es) hidden — cannot be issued`,
+                    value: '__expired_batches__',
+                    disabled: true,
+                  }]
+                : []),
+            ]}
             placeholder="Select batch(es)"
             size="small"
             style={{ width: '100%' }}

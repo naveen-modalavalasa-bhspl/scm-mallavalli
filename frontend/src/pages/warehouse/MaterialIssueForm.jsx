@@ -19,7 +19,8 @@ import api from '../../config/api';
 import useAuthStore from '../../store/authStore';
 import {
   formatDate, formatCurrency, formatNumber, getErrorMessage,
-  formatDateForAPI, exportDetailsToExcel, printDetailsToPDF
+  formatDateForAPI, exportDetailsToExcel, printDetailsToPDF,
+  splitIssuableBatches
 } from '../../utils/helpers';
 import { DATE_FORMAT } from '../../utils/constants';
 
@@ -326,9 +327,13 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
 
       // Auto-select if there is only one option to save user clicks
       const currentItems = form.getFieldValue('items') || [];
+      // Only auto-pick a batch the operator is actually allowed to issue —
+      // auto-selecting an expired one just pre-loads the form with a value the
+      // server will reject.
+      const autoBatches = splitIssuableBatches(batches).issuable;
       const hasUpdates = currentItems.some(it =>
         it.item_id === itemId &&
-        ((batches.length === 1 && !it.batch_id) || (bins.length === 1 && !it.bin_id))
+        ((autoBatches.length === 1 && !it.batch_id) || (bins.length === 1 && !it.bin_id))
       );
 
       if (hasUpdates) {
@@ -336,7 +341,7 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
           if (it.item_id === itemId) {
             return {
               ...it,
-              batch_id: (batches.length === 1 && !it.batch_id) ? batches[0].id : it.batch_id,
+              batch_id: (autoBatches.length === 1 && !it.batch_id) ? autoBatches[0].id : it.batch_id,
               bin_id: (bins.length === 1 && !it.bin_id) ? bins[0].id : it.bin_id,
             };
           }
@@ -1512,8 +1517,30 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
             />
           );
         }
+        // An expired batch is rejected by the server on submit, so never offer
+        // one here — the operator would otherwise pick quantities and unit codes
+        // only to be told "Batch X expired/expires today — cannot issue".
+        const { issuable: issuableBatches, expired: expiredBatches } =
+          splitIssuableBatches(details.batches);
+
+        if (record.has_batch && issuableBatches.length === 0) {
+          return (
+            <Tooltip title={`Every batch in stock has expired: ${
+              expiredBatches.map((b) => b.batch_number).join(', ')
+            }`}>
+              <Select
+                value={undefined}
+                disabled
+                placeholder="All batches expired"
+                size="small"
+                style={{ width: '100%' }}
+              />
+            </Tooltip>
+          );
+        }
+
         // Sort and filter batches based on requested qty and expiry date
-        let displayedBatches = [...details.batches];
+        let displayedBatches = [...issuableBatches];
         displayedBatches.sort((a, b) => {
           if (a.expiry_date && b.expiry_date) {
             return new Date(a.expiry_date) - new Date(b.expiry_date);
@@ -1578,10 +1605,21 @@ const MaterialIssueForm = ({ templateType, title: propTitle }) => {
                 ...rateUpdate
               });
             }}
-            options={displayedBatches.map((b) => ({
-              label: `${b.batch_number}${b.expiry_date ? ` (Exp: ${b.expiry_date})` : ''}${b.rate > 0 ? ` — ₹${b.rate}` : ''} - Qty: ${formatNumber(b.qty)}`,
-              value: b.id,
-            }))}
+            options={[
+              ...displayedBatches.map((b) => ({
+                label: `${b.batch_number}${b.expiry_date ? ` (Exp: ${b.expiry_date})` : ''}${b.rate > 0 ? ` — ₹${b.rate}` : ''} - Qty: ${formatNumber(b.qty)}`,
+                value: b.id,
+              })),
+              // Tell the operator why the on-hand quantity does not add up,
+              // instead of silently showing them fewer batches than exist.
+              ...(expiredBatches.length > 0
+                ? [{
+                    label: `${expiredBatches.length} expired batch(es) hidden — cannot be issued`,
+                    value: '__expired_batches__',
+                    disabled: true,
+                  }]
+                : []),
+            ]}
             placeholder="Select batch(es)"
             size="small"
             style={{ width: '100%' }}

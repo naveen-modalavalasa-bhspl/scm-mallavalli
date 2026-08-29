@@ -576,6 +576,8 @@ async def get_stock_balances(
 async def get_stock_balance_unit_codes(
     item_id: int = Query(...),
     warehouse_id: int = Query(...),
+    batch_id: int = Query(None, description="Restrict codes to this batch"),
+    bin_id: int = Query(None, description="Restrict codes to this bin"),
     page: int = Query(1, ge=1),
     page_size: int = Query(200, ge=1, le=2000),
     search: str = Query(None),
@@ -602,6 +604,12 @@ async def get_stock_balance_unit_codes(
         SerialNumber.warehouse_id == warehouse_id,
         SerialNumber.status == "available",
     )
+    # A unit code belongs to the batch it was minted against, so a caller
+    # showing one batch's cell must not be handed another batch's codes.
+    if batch_id is not None:
+        base = base.where(SerialNumber.batch_id == batch_id)
+    if bin_id is not None:
+        base = base.where(SerialNumber.bin_id == bin_id)
     if search:
         term = f"%{search.strip()}%"
         base = base.where(
@@ -704,14 +712,22 @@ async def get_vehicle_stock_balance(
                 if s:
                     all_v_serials.add(str(s))
 
+    # A serial is unique per ITEM, not globally (uq_item_serial) — the same
+    # string is reused across items, so resolving by serial alone handed a
+    # vehicle row whichever item's unit happened to come back first. That is how
+    # an asset item ended up rendering another item's consumable codes. Key the
+    # map by (item_id, serial) and scope the query to the items on this page.
     sn_obj_map = {}
-    if all_v_serials:
+    if all_v_serials and item_ids:
         from app.models.warehouse import SerialNumber
         sn_res = await db.execute(
-            select(SerialNumber).where(SerialNumber.serial_number.in_(list(all_v_serials)))
+            select(SerialNumber).where(
+                SerialNumber.serial_number.in_(list(all_v_serials)),
+                SerialNumber.item_id.in_(list(set(item_ids))),
+            )
         )
         for sn_obj in sn_res.scalars().all():
-            sn_obj_map[sn_obj.serial_number] = sn_obj
+            sn_obj_map[(sn_obj.item_id, sn_obj.serial_number)] = sn_obj
 
     data = []
     for r in records:
@@ -723,19 +739,17 @@ async def get_vehicle_stock_balance(
         acs = []
         ccs = []
         if r.serial_numbers:
-            from app.services.asset_service import generate_asset_code
             for s in r.serial_numbers:
                 raw_sn = str(s)
                 sns.append(raw_sn)
-                sn_obj = sn_obj_map.get(raw_sn)
+                # The code stored against the unit at putaway. This is NOT gated
+                # on the item's current has_unit_code toggle: turning the toggle
+                # off stops new codes being minted, it must not hide the code a
+                # unit already carries — which is what made previously
+                # acknowledged codes vanish from a vehicle's stock.
+                sn_obj = sn_obj_map.get((r.item_id, raw_sn))
                 act_ac = sn_obj.asset_code if sn_obj else None
                 act_cc = sn_obj.consumable_code if sn_obj else None
-
-                if r.item and getattr(r.item, "has_unit_code", False):
-                    if r.item.item_type == "asset" and not act_ac:
-                        act_ac = generate_asset_code(raw_sn, r.item.item_code)
-                    elif r.item.item_type == "consumable" and not act_cc:
-                        act_cc = generate_asset_code(raw_sn, r.item.item_code)
 
                 if act_ac:
                     acs.append(act_ac)

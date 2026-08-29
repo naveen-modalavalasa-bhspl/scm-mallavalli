@@ -556,131 +556,117 @@ async def stock_balance_breakdown(
             central_wh_ids.add(w.id)
 
     is_serial_tracked = False
-    is_asset_or_consumable = False
     if rows and rows[0].item:
         is_serial_tracked = bool(rows[0].item.has_serial)
-        is_asset_or_consumable = bool(getattr(rows[0].item, "has_unit_code", False))
-        
+
+    # Codes are loaded for every item, NOT gated on the item's current
+    # has_unit_code toggle. Turning that toggle off only stops NEW codes being
+    # minted at putaway — the units received while it was on still carry their
+    # asset/consumable code, and hiding them here made those earlier batches
+    # look code-less in the Stock Balance drill-down.
     serials_map = {}
     asset_codes_map = {}
     consumable_codes_map = {}
-    all_existing_sns = set()
-    if is_serial_tracked or is_asset_or_consumable:
-        from app.models.warehouse import SerialNumber
-        from sqlalchemy.orm import joinedload
-        
-        all_existing_sns = {
-            s[0] for s in (await db.execute(
-                select(SerialNumber.serial_number).where(SerialNumber.item_id == item_id)
-            )).all()
-        }
+    # Same maps keyed without the batch, used only for stock rows that carry no
+    # batch of their own (non-central warehouses null the batch out). A row that
+    # DOES have a batch only ever shows that batch's codes — codes must never
+    # bleed across batches.
+    serials_any_batch = {}
+    asset_any_batch = {}
+    consumable_any_batch = {}
+    from app.models.warehouse import SerialNumber
+    from sqlalchemy.orm import joinedload
 
-        s_query = (
-            select(SerialNumber)
-            .options(joinedload(SerialNumber.item))
-            .where(
-                SerialNumber.item_id == item_id,
-                SerialNumber.status == "available"
-            )
+    s_query = (
+        select(SerialNumber)
+        .options(joinedload(SerialNumber.item))
+        .where(
+            SerialNumber.item_id == item_id,
+            SerialNumber.status == "available"
         )
-        s_result = await db.execute(s_query)
-        for s in s_result.scalars().all():
-            is_cen = s.warehouse_id in central_wh_ids
-            key = (s.warehouse_id, s.bin_id if is_cen else None, s.batch_id if is_cen else None)
-            if key not in serials_map:
-                serials_map[key] = []
-            if key not in asset_codes_map:
-                asset_codes_map[key] = []
-            if key not in consumable_codes_map:
-                consumable_codes_map[key] = []
+    )
+    s_result = await db.execute(s_query)
+    for s in s_result.scalars().all():
+        is_cen = s.warehouse_id in central_wh_ids
+        bin_key = s.bin_id if is_cen else None
+        # The batch is ALWAYS part of the key: a unit code belongs to the batch
+        # it was minted against, so a batch row must never show another batch's
+        # codes. (The bin is still relaxed for non-central warehouses, which
+        # don't track bins.)
+        key = (s.warehouse_id, bin_key, s.batch_id)
+        any_key = (s.warehouse_id, bin_key)
+        for m in (serials_map, asset_codes_map, consumable_codes_map):
+            m.setdefault(key, [])
+        for m in (serials_any_batch, asset_any_batch, consumable_any_batch):
+            m.setdefault(any_key, [])
+
+        raw_serial = s.serial_number
+        act_asset_code = s.asset_code
+        act_consumable_code = s.consumable_code
+        
+        # Auto-generate dynamic codes if missing from database
+        if not act_asset_code and not act_consumable_code and s.item:
+            item_code = s.item.item_code
+            prefix = "1-"
+            suffix = f"-{item_code}"
+            new_prefix = f"{item_code}-1-"
+            if raw_serial.startswith(prefix) and raw_serial.endswith(suffix):
+                if s.item.item_type == "asset":
+                    act_asset_code = raw_serial
+                elif s.item.item_type == "consumable":
+                    act_consumable_code = raw_serial
+                raw_serial = raw_serial[len(prefix):-len(suffix)]
+            elif raw_serial.startswith(new_prefix):
+                if s.item.item_type == "asset":
+                    act_asset_code = raw_serial
+                elif s.item.item_type == "consumable":
+                    act_consumable_code = raw_serial
+                raw_serial = raw_serial[len(new_prefix):]
                 
-            raw_serial = s.serial_number
-            act_asset_code = s.asset_code
-            act_consumable_code = s.consumable_code
-            
-            # Auto-generate dynamic codes if missing from database
-            if not act_asset_code and not act_consumable_code and s.item:
-                item_code = s.item.item_code
-                prefix = "1-"
-                suffix = f"-{item_code}"
-                new_prefix = f"{item_code}-1-"
-                if raw_serial.startswith(prefix) and raw_serial.endswith(suffix):
-                    if s.item.item_type == "asset":
-                        act_asset_code = raw_serial
-                    elif s.item.item_type == "consumable":
-                        act_consumable_code = raw_serial
-                    raw_serial = raw_serial[len(prefix):-len(suffix)]
-                elif raw_serial.startswith(new_prefix):
-                    if s.item.item_type == "asset":
-                        act_asset_code = raw_serial
-                    elif s.item.item_type == "consumable":
-                        act_consumable_code = raw_serial
-                    raw_serial = raw_serial[len(new_prefix):]
-                    
-            # Display-time fallback for rows stored before a code was minted.
-            # Mirrors the putaway rule: only items opted into unit codes.
-            if s.item and getattr(s.item, "has_unit_code", False):
-                if s.item.item_type == "asset" and not act_asset_code:
-                    act_asset_code = generate_asset_code(raw_serial, s.item.item_code)
-                elif s.item.item_type == "consumable" and not act_consumable_code:
-                    act_consumable_code = generate_asset_code(raw_serial, s.item.item_code)
-            
-            serials_map[key].append(raw_serial)
-            if act_asset_code:
-                asset_codes_map[key].append(act_asset_code)
-            if act_consumable_code:
-                consumable_codes_map[key].append(act_consumable_code)
+        # Display-time fallback for rows stored before a code was minted.
+        # Mirrors the putaway rule: only items opted into unit codes.
+        if s.item and getattr(s.item, "has_unit_code", False):
+            if s.item.item_type == "asset" and not act_asset_code:
+                act_asset_code = generate_asset_code(raw_serial, s.item.item_code)
+            elif s.item.item_type == "consumable" and not act_consumable_code:
+                act_consumable_code = generate_asset_code(raw_serial, s.item.item_code)
+        
+        serials_map[key].append(raw_serial)
+        serials_any_batch[any_key].append(raw_serial)
+        if act_asset_code:
+            asset_codes_map[key].append(act_asset_code)
+            asset_any_batch[any_key].append(act_asset_code)
+        if act_consumable_code:
+            consumable_codes_map[key].append(act_consumable_code)
+            consumable_any_batch[any_key].append(act_consumable_code)
 
     items = []
-    should_commit = False
     for r in rows:
         is_cen = r.warehouse_id in central_wh_ids
-        key = (r.warehouse_id, r.bin_id if is_cen else None, r.batch_id if is_cen else None)
-        
-        sns = list(serials_map.get(key, []))
-        acs = list(asset_codes_map.get(key, []))
-        ccs = list(consumable_codes_map.get(key, []))
-        
-        # If the item is opted into unit codes and the database has NO
-        # serials/codes, mint the missing rows.
-        if (r.item and getattr(r.item, "has_unit_code", False)
-                and r.item.item_type in ("asset", "consumable")
-                and not sns and not acs and not ccs):
-            qty_int = int(r.total_qty)
-            if qty_int > 0:
-                from app.models.warehouse import SerialNumber as DB_SerialNumber
-                
-                i = 1
-                generated_count = 0
-                max_gen = min(qty_int, 50)
-                while generated_count < max_gen:
-                    v_sn = f"V{i}"
-                    if v_sn not in all_existing_sns:
-                        v_code = generate_asset_code(v_sn, r.item.item_code)
-                        
-                        new_sn = DB_SerialNumber(
-                            item_id=r.item_id,
-                            serial_number=v_sn,
-                            batch_id=r.batch_id,
-                            status="available",
-                            warehouse_id=r.warehouse_id,
-                            bin_id=r.bin_id,
-                            asset_code=v_code if r.item.item_type == "asset" else None,
-                            consumable_code=v_code if r.item.item_type == "consumable" else None
-                        )
-                        db.add(new_sn)
-                        all_existing_sns.add(v_sn)
-                        should_commit = True
-                        
-                        sns.append(v_sn)
-                        if r.item.item_type == "asset":
-                            acs.append(v_code)
-                        else:
-                            ccs.append(v_code)
-                        generated_count += 1
-                    i += 1
+        bin_key = r.bin_id if is_cen else None
 
+        if r.batch_id is not None:
+            # Batched cell: only this batch's codes, never a neighbour's.
+            key = (r.warehouse_id, bin_key, r.batch_id)
+            sns = list(serials_map.get(key, []))
+            acs = list(asset_codes_map.get(key, []))
+            ccs = list(consumable_codes_map.get(key, []))
+        else:
+            # Unbatched cell (non-central warehouses null the batch out): fall
+            # back to every code held in this warehouse/bin.
+            any_key = (r.warehouse_id, bin_key)
+            sns = list(serials_any_batch.get(any_key, []))
+            acs = list(asset_any_batch.get(any_key, []))
+            ccs = list(consumable_any_batch.get(any_key, []))
+
+        # NOTE: this used to mint fabricated "V1..V50" SerialNumber rows into
+        # the database whenever a cell had no codes, so the drill-down and the
+        # issue code-picker both showed placeholder codes that matched no real
+        # unit. Quantity received while the has_unit_code toggle is off simply
+        # HAS no unit code — the UI now says so instead of inventing one.
+        
         data = {
+            "item_id": r.item_id,
             "warehouse_id": r.warehouse_id,
             "warehouse_name": r.warehouse.name if r.warehouse else None,
             "bin_id": r.bin_id,
@@ -737,12 +723,7 @@ async def stock_balance_breakdown(
             data["location_code"] = None
             
         items.append(data)
-        
-    if should_commit:
-        try:
-            await db.commit()
-        except Exception:
-            await db.rollback()
+
     return {"items": items}
 
 
