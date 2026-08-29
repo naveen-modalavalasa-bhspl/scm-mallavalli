@@ -674,9 +674,6 @@ const InventoryDashboard = () => {
                   <Text type="secondary" style={{ fontSize: 12 }}>Real-time visibility across warehouses • Last sync: {dayjs().format('HH:mm:ss')} • {daysCount} Days Metrics</Text>
                 </div>
               </div>
-              <Badge count={summaryStats.low_stock_alerts + summaryStats.expiring_soon} offset={[0, -2]}>
-                <Button icon={<BellOutlined />} shape="circle" size="large" className="bell-btn" onClick={() => navigate('/inventory/notifications')} />
-              </Badge>
             </Space>
           </Col>
           <Col xs={24} md={12} style={{ textAlign: 'right' }}>
