@@ -68,6 +68,9 @@ async def create_api_key(
         "inventory:vehicle-stock-balance:read": "/api/v1/external/inventory/vehicle-stock-balance",
         "inventory:vehicle-stock-ledger:read": "/api/v1/external/inventory/vehicle-stock-ledger",
         "indent:acknowledgement:read":  "/api/v1/external/indent/acknowledgements",
+        "indent:template-indents:read": "/api/v1/external/indent/template-indents",
+        "warehouse:vehicle-issues:read": "/api/v1/external/warehouse/vehicle-issues",
+        "warehouse:material-acknowledgements:read": "/api/v1/external/warehouse/material-acknowledgements",
     }
 
     scopes_list = payload.scopes or []
@@ -208,6 +211,9 @@ def _compute_endpoint(scopes_list: list, base_url: str) -> str | None:
         "inventory:vehicle-stock-balance:read": "/api/v1/external/inventory/vehicle-stock-balance",
         "inventory:vehicle-stock-ledger:read": "/api/v1/external/inventory/vehicle-stock-ledger",
         "indent:acknowledgement:read":  "/api/v1/external/indent/acknowledgements",
+        "indent:template-indents:read": "/api/v1/external/indent/template-indents",
+        "warehouse:vehicle-issues:read": "/api/v1/external/warehouse/vehicle-issues",
+        "warehouse:material-acknowledgements:read": "/api/v1/external/warehouse/material-acknowledgements",
     }
     seen = set()
     paths = []

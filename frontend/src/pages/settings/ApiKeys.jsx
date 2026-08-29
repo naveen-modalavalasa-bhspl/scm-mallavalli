@@ -70,6 +70,14 @@ const SCOPE_OPTIONS = [
     label: 'Indent',
     options: [
       { label: 'Indent Acknowledgement (Read)', value: 'indent:acknowledgement:read' },
+      { label: 'Template Indents (Read)', value: 'indent:template-indents:read' },
+    ]
+  },
+  {
+    label: 'Warehouse',
+    options: [
+      { label: 'Vehicle Issues (Read)', value: 'warehouse:vehicle-issues:read' },
+      { label: 'Material Acknowledgements (Read)', value: 'warehouse:material-acknowledgements:read' },
     ]
   }
 ];
